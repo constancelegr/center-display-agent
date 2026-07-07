@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Social Lens Driver Simulator</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="simulator" aria-label="Interactive Social Lens driving simulator"></canvas>
+
+      <div class="cockpit" aria-hidden="true">
+        <div class="windshield-glass"></div>
+        <div class="windshield-top"></div>
+        <div class="pillar pillar-left"></div>
+        <div class="pillar pillar-right"></div>
+        <div class="rear-mirror">
+          <div class="rear-alert" id="rearAlert" aria-hidden="true">
+            <span class="rear-alert-lights"></span>
+            <strong>Emergency behind</strong>
+          </div>
+        </div>
+        <div class="dashboard">
+          <div class="instrument instrument-speed">
+            <small>Speed</small>
+            <span id="speedReadout">24</span>
+            <em>mph</em>
+          </div>
+          <div class="assist-status">
+            <small>Lane Assist</small>
+            <strong id="guidanceStatus">Monitoring</strong>
+            <div class="lane-mini">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          <div class="input-status dashboard-input-slot" id="wheelStatus" title="Keyboard steering">
+            <small>Input</small>
+            <strong>Keyboard</strong>
+            <em id="steeringReadout">Steer 0.00</em>
+            <span class="gamepad-hint" id="gamepadHint">Select G29, then press a pedal</span>
+            <div class="input-mode-switch" role="group" aria-label="Input mode">
+              <button class="is-active" id="keyboardMode" type="button" aria-pressed="true">Keys</button>
+              <button id="g29Mode" type="button" aria-pressed="false">G29</button>
+            </div>
+          </div>
+        </div>
+        <div class="wheel">
+          <div class="wheel-rim-highlight"></div>
+          <div class="wheel-spoke wheel-spoke-left"></div>
+          <div class="wheel-spoke wheel-spoke-right"></div>
+          <div class="wheel-spoke wheel-spoke-bottom"></div>
+          <div class="wheel-grip wheel-grip-left"></div>
+          <div class="wheel-grip wheel-grip-right"></div>
+          <div class="wheel-grip wheel-grip-bottom"></div>
+          <div class="wheel-hub">
+            <span class="wheel-badge"></span>
+          </div>
+        </div>
+      </div>
+
+      <header class="topbar" aria-label="Simulator toggles">
+        <div class="mode-strip" role="group" aria-label="View mode">
+          <button class="icon-button is-active" id="lensToggle" type="button" aria-pressed="true" title="Social Lens">
+            <i data-lucide="scan-line"></i>
+          </button>
+          <button class="icon-button" id="guidanceToggle" type="button" aria-pressed="true" title="Guidance">
+            <i data-lucide="route"></i>
+          </button>
+          <button class="icon-button is-active" id="soundToggle" type="button" aria-label="Sound" aria-pressed="true" title="Sound">
+            <i data-lucide="volume-2"></i>
+          </button>
+          <button class="icon-button" id="pauseToggle" type="button" aria-pressed="false" title="Pause motion">
+            <i data-lucide="pause"></i>
+          </button>
+        </div>
+      </header>
+
+      <section class="interpretation" aria-live="polite">
+        <div class="signal-row">
+          <span class="signal-dot" id="signalDot"></span>
+          <span id="intentLabel">Turn right ahead</span>
+        </div>
+        <p id="intentCopy">Center console route is guiding you right onto Bohlman Rd.</p>
+        <div class="next-move">
+          <i data-lucide="navigation"></i>
+          <span id="nextMove">Follow the right-turn guide toward the destination.</span>
+        </div>
+      </section>
+
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
