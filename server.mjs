@@ -4,19 +4,15 @@ import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
 
-const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "dist");
+const workspaceRoot = resolve(fileURLToPath(new URL(".", import.meta.url)));
+const root = resolve(workspaceRoot, "dist");
+const centerConsoleRoot = resolve(workspaceRoot, "center-console");
 const port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || "0.0.0.0";
 const syncPath = "/social-lens-sync";
 const syncClients = new Set();
 const syncRelay = new WebSocketServer({ noServer: true });
-const cachedSimulatorStateMaxAge = 3000;
-const activeSimulatorSourceMaxAge = 2500;
-let lastSimulatorStateMessage = null;
-let lastSimulatorStateReceivedAt = 0;
-let activeSimulatorSource = null;
-let hasSeenTaggedSimulatorSource = false;
-let nextSyncSocketId = 0;
+let lastSyncMessage = null;
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -36,9 +32,14 @@ const handleRequest = async (request, response) => {
     const requestUrl = new URL(request.url || "/", `http://${request.headers.host}`);
     const decodedPath = decodeURIComponent(requestUrl.pathname);
     const safePath = normalize(decodedPath).replace(/^(\.\.[/\\])+/, "");
-    let filePath = resolve(join(root, safePath));
+    const isCenterConsole = safePath === "/center-console" || safePath.startsWith("/center-console/");
+    const servingRoot = isCenterConsole ? centerConsoleRoot : root;
+    const relativePath = isCenterConsole
+      ? safePath.replace(/^\/center-console/, "").replace(/^\/+/, "")
+      : safePath.replace(/^\/+/, "");
+    let filePath = resolve(join(servingRoot, relativePath));
 
-    if (!filePath.startsWith(root)) {
+    if (!filePath.startsWith(servingRoot)) {
       response.writeHead(403);
       response.end("Forbidden");
       return;
@@ -48,9 +49,9 @@ const handleRequest = async (request, response) => {
     if (fileStat?.isDirectory()) {
       const directoryIndex = join(filePath, "index.html");
       const directoryIndexStat = await stat(directoryIndex).catch(() => null);
-      filePath = directoryIndexStat?.isFile() ? directoryIndex : join(root, "index.html");
+      filePath = directoryIndexStat?.isFile() ? directoryIndex : join(servingRoot, "index.html");
     } else if (!fileStat) {
-      filePath = join(root, "index.html");
+      filePath = join(servingRoot, "index.html");
     }
 
     const body = await readFile(filePath);
@@ -66,77 +67,13 @@ const handleRequest = async (request, response) => {
   }
 };
 
-function getSimulatorSource(parsedMessage, socket) {
-  const source = parsedMessage?.source && typeof parsedMessage.source === "object" ? parsedMessage.source : {};
-  const startedAt = Number(source.startedAt);
-  return {
-    id: typeof source.id === "string" && source.id ? source.id : `legacy-${socket.syncClientId}`,
-    startedAt: Number.isFinite(startedAt) && startedAt > 0 ? startedAt : 0,
-    socket
-  };
-}
-
-function setActiveSimulatorSource(source, receivedAt) {
-  activeSimulatorSource = {
-    id: source.id,
-    startedAt: source.startedAt,
-    socket: source.socket,
-    lastReceivedAt: receivedAt
-  };
-}
-
-function shouldAcceptSimulatorState(parsedMessage, socket) {
-  const receivedAt = Date.now();
-  const source = getSimulatorSource(parsedMessage, socket);
-  if (source.startedAt) {
-    hasSeenTaggedSimulatorSource = true;
-  } else if (hasSeenTaggedSimulatorSource) {
-    return false;
-  }
-
-  const activeIsFresh =
-    activeSimulatorSource?.socket?.readyState === WebSocket.OPEN &&
-    receivedAt - activeSimulatorSource.lastReceivedAt <= activeSimulatorSourceMaxAge;
-
-  if (!activeIsFresh) {
-    setActiveSimulatorSource(source, receivedAt);
-    return true;
-  }
-
-  if (source.id === activeSimulatorSource.id) {
-    setActiveSimulatorSource(source, receivedAt);
-    return true;
-  }
-
-  if (source.startedAt && (!activeSimulatorSource.startedAt || source.startedAt > activeSimulatorSource.startedAt)) {
-    setActiveSimulatorSource(source, receivedAt);
-    return true;
-  }
-
-  return false;
-}
-
 syncRelay.on("connection", (socket) => {
-  socket.syncClientId = ++nextSyncSocketId;
   syncClients.add(socket);
-  if (lastSimulatorStateMessage && Date.now() - lastSimulatorStateReceivedAt < cachedSimulatorStateMaxAge) {
-    socket.send(lastSimulatorStateMessage);
-  }
+  if (lastSyncMessage) socket.send(lastSyncMessage);
 
   socket.on("message", (data) => {
     const message = data.toString();
-    let parsedMessage = null;
-    try {
-      parsedMessage = JSON.parse(message);
-    } catch {
-      parsedMessage = null;
-    }
-    if (parsedMessage?.type === "SIMULATOR_STATE") {
-      if (parsedMessage.protocolVersion !== 9) return;
-      if (!shouldAcceptSimulatorState(parsedMessage, socket)) return;
-      lastSimulatorStateMessage = message;
-      lastSimulatorStateReceivedAt = Date.now();
-    }
+    lastSyncMessage = message;
 
     for (const client of syncClients) {
       if (client !== socket && client.readyState === WebSocket.OPEN) {
@@ -145,13 +82,13 @@ syncRelay.on("connection", (socket) => {
     }
   });
 
-  const handleSocketEnd = () => {
+  socket.on("close", () => {
     syncClients.delete(socket);
-    if (activeSimulatorSource?.socket === socket) activeSimulatorSource = null;
-  };
+  });
 
-  socket.on("close", handleSocketEnd);
-  socket.on("error", handleSocketEnd);
+  socket.on("error", () => {
+    syncClients.delete(socket);
+  });
 });
 
 function attachSyncRelay(httpServer) {
