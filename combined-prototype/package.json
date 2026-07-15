@@ -1,0 +1,23 @@
+{
+  "name": "combined-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && PORT=5177 node server.mjs",
+    "build": "vite build",
+    "preview": "PORT=5177 node server.mjs",
+    "serve": "PORT=5177 node server.mjs",
+    "start": "PORT=5177 node server.mjs",
+    "console": "CENTER_PORT=5178 node center-console-server.mjs"
+  },
+  "dependencies": {
+    "lucide": "^0.468.0",
+    "three": "^0.171.0",
+    "vite": "^8.0.16",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "pngjs": "^7.0.0"
+  }
+}
