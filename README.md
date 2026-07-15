@@ -1,32 +1,11 @@
-# Convergence Project Driving Simulator Duplicate
+# Center Display Agent Prototypes
 
-This is a separate copy of the Social Lens driving simulator.
+This repo hosts multiple independent prototypes, one per folder. Each folder is self-contained
+with its own `package.json`/dependencies and its own `readme.md` with setup instructions.
 
-## Run
-
-```sh
-npm install
-npm run dev
-```
-
-The duplicate runs on:
-
-```text
-http://127.0.0.1:5175/
-```
-
-Its sync relay runs on:
-
-```text
-ws://127.0.0.1:5175/social-lens-sync
-```
-
-The original simulator project remains at:
-
-```text
-/Users/jukvm/Desktop/convergence project #1
-http://127.0.0.1:5173/
-```
-
-Keep this duplicate independent unless you intentionally want to port changes
-back to the original simulator.
+- [`center-console/`](center-console/readme.md) — driving simulator + CarPlay-style center
+  console display, synced over WebSocket.
+- [`social-virtual-lens/`](social-virtual-lens/readme.md) — driving simulator overlaying social
+  intent signals from nearby vehicles.
+- [`center-display-agent/`](center-display-agent/readme.md) — not yet built
+- [`combined-prototype/`](combined-prototype/readme.md) — not yet built

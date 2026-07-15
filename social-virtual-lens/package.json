@@ -1,0 +1,22 @@
+{
+  "name": "social-virtual-lens-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && node server.mjs",
+    "build": "vite build",
+    "preview": "node server.mjs",
+    "serve": "node server.mjs",
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "lucide": "^0.468.0",
+    "three": "^0.171.0",
+    "vite": "^8.0.16",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "pngjs": "^7.0.0"
+  }
+}

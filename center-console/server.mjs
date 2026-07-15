@@ -6,7 +6,7 @@ import { WebSocket, WebSocketServer } from "ws";
 
 const workspaceRoot = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const root = resolve(workspaceRoot, "dist");
-const centerConsoleRoot = resolve(workspaceRoot, "center-console");
+const centerConsoleRoot = resolve(workspaceRoot, "console");
 const port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || "0.0.0.0";
 const syncPath = "/social-lens-sync";
@@ -32,10 +32,10 @@ const handleRequest = async (request, response) => {
     const requestUrl = new URL(request.url || "/", `http://${request.headers.host}`);
     const decodedPath = decodeURIComponent(requestUrl.pathname);
     const safePath = normalize(decodedPath).replace(/^(\.\.[/\\])+/, "");
-    const isCenterConsole = safePath === "/center-console" || safePath.startsWith("/center-console/");
+    const isCenterConsole = safePath === "/console" || safePath.startsWith("/console/");
     const servingRoot = isCenterConsole ? centerConsoleRoot : root;
     const relativePath = isCenterConsole
-      ? safePath.replace(/^\/center-console/, "").replace(/^\/+/, "")
+      ? safePath.replace(/^\/console/, "").replace(/^\/+/, "")
       : safePath.replace(/^\/+/, "");
     let filePath = resolve(join(servingRoot, relativePath));
 
