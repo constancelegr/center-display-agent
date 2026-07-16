@@ -24,6 +24,19 @@ const steeringReadout = document.querySelector("#steeringReadout");
 const gamepadHint = document.querySelector("#gamepadHint");
 const keyboardMode = document.querySelector("#keyboardMode");
 const g29Mode = document.querySelector("#g29Mode");
+const agentTalkButton = document.querySelector("#agentTalkButton");
+const agentVoicePanel = document.querySelector("#agentVoicePanel");
+const agentVoiceStatus = document.querySelector("#agentVoiceStatus");
+const agentVoicePrompt = document.querySelector("#agentVoicePrompt");
+const agentVoiceTranscript = document.querySelector("#agentVoiceTranscript");
+const agentVoiceDebug = document.querySelector("#agentVoiceDebug");
+const agentHoldChoice = document.querySelector("#agentHoldChoice");
+const agentProceedChoice = document.querySelector("#agentProceedChoice");
+const agentCollapseButton = document.querySelector("#agentCollapseButton");
+const senderPerspective = document.querySelector("#senderPerspective");
+const senderPerspectiveIcon = document.querySelector("#senderPerspectiveIcon");
+const senderPerspectiveTitle = document.querySelector("#senderPerspectiveTitle");
+const senderPerspectiveDetail = document.querySelector("#senderPerspectiveDetail");
 
 const lensToggle = document.querySelector("#lensToggle");
 const guidanceToggle = document.querySelector("#guidanceToggle");
@@ -182,7 +195,7 @@ const scenarioDefinitions = [
     micro: "Waiting signal",
     intent: "Waiting vehicle",
     copy: "Cross-traffic is holding.",
-    next: "Choose: stop or continue.",
+    next: "Agent is monitoring. Say stop/hold or continue.",
     color: "#8fb5ff",
     comfort: 76,
     recommendedSpeed: 30,
@@ -223,6 +236,47 @@ const scenarioDefinitions = [
       { type: "hazard", lane: 0.26, z: -22, color: "#ffc863" },
       { type: "guide", lane: 0, toLane: -1, z: -4.8, color: "#97f6b0" },
       { type: "vehicle-outline", target: "right", color: "#7df6e8" }
+    ]
+  },
+  {
+    id: "route-right-turn",
+    icon: "route",
+    title: "Console Right Turn",
+    micro: "Bohlman Rd sync",
+    intent: "Yellow car waiting",
+    copy: "A yellow car across the intersection is waiting to turn left onto Bohlman Rd while we prepare to turn right.",
+    next: "You keep right of way unless you send Go ahead from the center display.",
+    color: "#0a84ff",
+    comfort: 82,
+    recommendedSpeed: 22,
+    route: {
+      id: "bohlman-right-turn",
+      distanceText: "0.3 mi",
+      instruction: "Turn right",
+      road: "Bohlman Rd",
+      destination: "Center display stop",
+      maneuver: "right"
+    },
+    vehicles: [
+      {
+        name: "incoming-right-turn-request",
+        label: "Yellow car",
+        mapRole: "incoming",
+        lane: -1,
+        z: -74,
+        speed: 0.05,
+        color: "#f5d46e",
+        accent: "#ff3832",
+        glow: "amber",
+        incomingRightTurn: true,
+        coordinationRequest: true,
+        requestType: "incoming-right-turn"
+      }
+    ],
+    overlays: [
+      { type: "vehicle-outline", target: "incoming-right-turn-request", color: "#ffc863", style: "glow" },
+      { type: "wait-aura", target: "incoming-right-turn-request", color: "#ffc863" },
+      { type: "wait-icon", target: "incoming-right-turn-request", color: "#ffc863" }
     ]
   }
 ];
@@ -299,14 +353,32 @@ const state = {
   paused: false,
   time: 0,
   steeringImpulse: 0,
+  visualSteeringAxis: 0,
   routeTurnActive: false,
   routeTurnComplete: false,
   routeTurnProgress: 0,
   routeTurnStartLateral: 0,
   routeTurnSteerIntent: 0,
+  routeTurnSteerBlend: 0,
   routeDriveStarted: false,
   routeSideDistance: 0,
-  routeApproachDistance: 0
+  routeApproachDistance: 0,
+  routeDestinationReachedAt: null,
+  routeAgentPrompted: false,
+  routeAgentPromptSpoken: false,
+  routeAgentAwaitingRequest: false,
+  routeAgentConversationActive: false,
+  routeAgentLastQuestion: "",
+  routeAgentLastResponse: "",
+  routeAssistanceChoice: "",
+  centerDisplayGoAheadSentAt: null,
+  centerDisplayThankYouAt: null,
+  agentListening: false,
+  agentAutoListen: false,
+  lastAgentCommand: "",
+  lastAgentCommandAt: -Infinity,
+  senderPerspectiveUntil: 0,
+  scenarioActivationId: 0
 };
 
 const keyboardDriveKeys = new Set();
@@ -316,11 +388,13 @@ const cameraBaseHeight = 1.58;
 const cameraBaseZ = 4.7;
 const routeTurnStreetZ = -33.2;
 const routeTurnProgressRate = 0.15;
+const routeScenarioResetDelay = 2;
 const routeTurnSteerStartThreshold = 0.16;
 const routeTurnSteerHoldThreshold = 0.035;
 const routeTurnReadyDistance = 30;
 const routeTurnApproachDistance = 42;
 const routeTurnMissWindowDistance = 30;
+const routeAgentPromptDistance = 18;
 const routeStraightDistanceScale = 0.78;
 const freeDriveWorldLength = 1000000;
 const freeDriveWorldStartZ = 48;
@@ -330,12 +404,13 @@ const routeTurnCurveEnd = 0.74;
 const routeTurnEntryX = 0;
 const routeTurnFinalX = laneWidth * 5.15;
 const routeTurnCornerRadius = 7.2;
-const routeSideDistanceScale = 0.64;
+const routeApproachDistanceScale = 0.42;
+const routeSideDistanceScale = 0.46;
 // Keep enough side-road world in front of the driver for an extended free-drive
 // session after the guided turn. The previous 720-unit cap made the camera stop
 // even though the car still had speed.
 const routeSideDistanceLimit = 2400;
-const routeDestinationDistance = 680;
+const routeDestinationDistance = 220;
 const routeSideRoadSceneStartX = -32;
 const routeSideRoadSceneEndX = routeTurnFinalX + routeSideDistanceLimit + 132;
 const routeSideRoadSceneCenterX = (routeSideRoadSceneStartX + routeSideRoadSceneEndX) / 2;
@@ -372,9 +447,22 @@ const proceedButtonCandidates = [0, 1, 2, 3];
 const proceedButtonPressThreshold = 0.55;
 const centerDisplayChannelName = "social-lens:center-display";
 const centerDisplayConePassZ = 7.5;
-const centerDisplayTelemetryMinInterval = 90;
+const centerDisplayTelemetryMinInterval = 50;
 const centerDisplaySourceId = `sim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const centerDisplaySourceStartedAt = Date.now();
+const senderPerspectiveDuration = 6200;
+const yieldingAgentQuestion =
+  "I see a merging car ahead. Would you like to proceed and keep your right of way, or hold space and show the assistance visuals?";
+const rightOfWayAgentQuestion =
+  "Cross traffic is waiting and the right of way is unclear. You can say stop or hold to mark the stop point, or continue to keep rolling.";
+const routeRightTurnNotice =
+  "A yellow car across the intersection is waiting to turn left onto Bohlman Road while we prepare to turn right. We still have right of way.";
+const communicationStyles = {
+  thanks: { label: "Thank you", color: "#ff375f", icon: "heart" },
+  sorry: { label: "Sorry", color: "#ff9f0a", icon: "message-circle" },
+  goahead: { label: "Go ahead", color: "#34c759", icon: "send" },
+  emergency: { label: "Emergency", color: "#ff3b30", icon: "triangle-alert" }
+};
 const visibleVehicleMap = new Map();
 const trafficSignalLights = [];
 const siren = {
@@ -417,13 +505,23 @@ let centerDisplayTelemetrySentCount = 0;
 let canvasPixelDebugFrame = 0;
 let animationDebugFrameCount = 0;
 let lastRenderWallTime = 0;
+let lastCenterDisplayCommandKey = "";
+let lastCenterDisplayCommandAt = 0;
+let agentRecognition = null;
+let preferredAgentVoice = null;
+let pendingAgentSpeech = "";
+let pendingAgentSpeechOnEnd = null;
+let pendingAgentSpeechTimer = null;
+let agentMicBlocked = false;
 const routeRibbonSegments = [];
+const routeGuideSegments = [];
 let routeTrackerDot = null;
 createScene();
 createScenarioButtons();
 createIcons({ icons });
+prepareAgentVoice();
 bindCenterDisplayConeEvents();
-activateScenario(0);
+activateScenario(0, { fromUser: false });
 bindControls();
 resize();
 animate();
@@ -1136,6 +1234,7 @@ function createRouteWorldTracking() {
   routeWorldGroup.clear();
   routeTrackerGroup.clear();
   routeRibbonSegments.length = 0;
+  routeGuideSegments.length = 0;
 
   const routePoints = createRouteWorldPoints(64, {
     startX: 0,
@@ -1170,6 +1269,7 @@ function createRouteWorldTracking() {
     material: routeMaterial,
     progressOffset: 0,
     addTo: routeWorldGroup,
+    routeGuide: true,
     trackProgress: true
   });
 
@@ -1185,7 +1285,8 @@ function createRouteWorldTracking() {
       y: 0.057,
       material: edgeMaterial,
       progressOffset: 0,
-      addTo: routeWorldGroup
+      addTo: routeWorldGroup,
+      routeGuide: true
     });
   });
 
@@ -1235,7 +1336,9 @@ function createRouteSegments(points, options) {
     const segment = createGroundSegment(from, to, options.width, options.y, options.material.clone());
     segment.userData.routeProgress = progressMidpoint;
     segment.userData.baseOpacity = segment.material.opacity ?? 1;
+    segment.userData.routeGuide = Boolean(options.routeGuide);
     if (options.trackProgress) routeRibbonSegments.push(segment);
+    if (options.routeGuide) routeGuideSegments.push(segment);
     options.addTo.add(segment);
   }
 }
@@ -1333,13 +1436,14 @@ function updateRouteWorldTracking() {
   const yaw = Math.atan2(-(lookAheadPoint.x - currentPoint.x), -(lookAheadPoint.z - currentPoint.z));
   routeTrackerGroup.position.set(currentPoint.x, 0, currentPoint.z);
   routeTrackerGroup.rotation.y = Number.isFinite(yaw) ? yaw : currentPoint.yaw;
+  routeTrackerGroup.visible = false;
 
   routeRibbonSegments.forEach((segment) => {
-    const distanceFromCurrent = segment.userData.routeProgress - state.routeTurnProgress;
-    const isAhead = distanceFromCurrent >= -0.04;
-    segment.material.opacity = isAhead
-      ? THREE.MathUtils.lerp(0.48, 0.82, THREE.MathUtils.clamp(distanceFromCurrent * 2.2 + 0.35, 0, 1))
-      : 0.18;
+    segment.material.opacity = 0;
+  });
+  routeGuideSegments.forEach((segment) => {
+    if (routeRibbonSegments.includes(segment)) return;
+    segment.material.opacity = 0;
   });
 
   document.documentElement.dataset.routeWorldX = currentPoint.x.toFixed(3);
@@ -1380,15 +1484,20 @@ function createScenarioButtons() {
       </span>
       <b class="scenario-index">${String(index + 1).padStart(2, "0")}</b>
     `;
-    button.addEventListener("click", () => activateScenario(index));
+    button.addEventListener("click", () => activateScenario(index, { fromUser: true }));
     scenarioList.appendChild(button);
   });
 }
 
-function activateScenario(index) {
+function activateScenario(index, options = {}) {
   const nextIndex = THREE.MathUtils.clamp(index, 0, scenarioDefinitions.length - 1);
+  const previousScenario = scenarioDefinitions[state.scenarioIndex];
+  const carryAgentAutoListen = state.agentAutoListen && isAgentVoiceScenario(previousScenario);
   state.scenarioIndex = nextIndex;
+  state.scenarioActivationId += 1;
+  const activationId = state.scenarioActivationId;
   const scenario = scenarioDefinitions[nextIndex];
+  const shouldAutoListen = Boolean(options.fromUser || options.continueVoice || (carryAgentAutoListen && previousScenario?.id === scenario.id));
   state.targetSpeed = scenario.recommendedSpeed ?? Math.min(state.targetSpeed, 24);
   if (scenario.id === "route-right-turn" && (state.inputMode === "g29" || state.inputMode === "keyboard")) {
     state.speed = 0;
@@ -1426,9 +1535,25 @@ function activateScenario(index) {
   state.routeTurnProgress = 0;
   state.routeTurnStartLateral = 0;
   state.routeTurnSteerIntent = 0;
+  state.routeTurnSteerBlend = 0;
   state.routeDriveStarted = false;
   state.routeSideDistance = 0;
   state.routeApproachDistance = 0;
+  state.routeDestinationReachedAt = null;
+  state.routeAgentPrompted = false;
+  state.routeAgentPromptSpoken = false;
+  state.routeAgentAwaitingRequest = false;
+  state.routeAgentConversationActive = false;
+  state.routeAgentLastQuestion = "";
+  state.routeAgentLastResponse = "";
+  state.routeAssistanceChoice = "";
+  state.centerDisplayGoAheadSentAt = null;
+  state.centerDisplayThankYouAt = null;
+  state.agentListening = false;
+  state.agentAutoListen = false;
+  state.lastAgentCommand = "";
+  state.lastAgentCommandAt = -Infinity;
+  state.senderPerspectiveUntil = 0;
   keyboardDriveKeys.clear();
   wheelInput.brakeHeld = false;
   wheelInput.brakeAmount = 0;
@@ -1446,6 +1571,8 @@ function activateScenario(index) {
   rearAlert?.classList.toggle("is-active", scenario.id === "emergency");
   rearAlert?.setAttribute("aria-hidden", String(scenario.id !== "emergency"));
   setEmergencySirenActive(scenario.id === "emergency");
+  resetAgentVoicePanel(scenario);
+  updateSenderPerspectiveVisibility();
 
   if (scenarioList) {
     [...scenarioList.children].forEach((button, buttonIndex) => {
@@ -1456,8 +1583,821 @@ function activateScenario(index) {
   rebuildTraffic(scenario);
   rebuildOverlays(scenario);
   updateDecisionControls();
+  updateRouteAssistanceVisualState();
   syncRouteTurnDebug();
   updateRouteWorldTracking();
+
+  if (isAgentVoiceScenario(scenario)) {
+    if (scenario.id === "route-right-turn") {
+      showRouteRightTurnNotice({
+        activationId,
+        forceSpeak: true,
+        listenAfterSpeech: shouldAutoListen
+      });
+    } else {
+      promptYieldingAgentDecision({
+        activationId,
+        forceSpeak: true,
+        listenAfterSpeech: shouldAutoListen
+      });
+    }
+  }
+}
+
+function resetAgentVoicePanel(scenario) {
+  stopAgentListening();
+  cancelAgentSpeech();
+  agentTalkButton?.classList.remove("is-listening");
+  agentTalkButton?.setAttribute("aria-pressed", "false");
+  setAgentVoiceDebug("Voice: waiting for mic.");
+  hideAgentVoicePanel();
+
+  if (scenario.id === "yielding") {
+    guidanceStatus.textContent = "Quiet";
+    intentLabel.textContent = "Agent monitoring";
+    intentCopy.textContent = "No assistance visuals are active yet. The agent is asking how you want to handle the merge.";
+    nextMove.textContent = "Answer by voice or tap Hold / Proceed.";
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Agent";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = yieldingAgentQuestion;
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Tap the mic and say “hold” or “proceed,” or tap a choice.";
+    return;
+  }
+
+  if (scenario.id === "right-of-way") {
+    guidanceStatus.textContent = "Unclear";
+    intentLabel.textContent = "Cross traffic waiting";
+    intentCopy.textContent = "A waiting car is holding, and the right of way is unclear.";
+    nextMove.textContent = "Say stop/hold to mark the stop point, or continue to keep moving.";
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Agent";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = rightOfWayAgentQuestion;
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Say “stop,” “hold,” or “continue.”";
+    return;
+  }
+
+  if (scenario.id === "route-right-turn") {
+    guidanceStatus.textContent = "Right of way";
+    intentLabel.textContent = "Yellow car waiting";
+    intentCopy.textContent = "A yellow car across the intersection is waiting to turn left onto Bohlman Rd while we prepare to turn right.";
+    nextMove.textContent = "Keep your right of way. Use the center display only if you choose to send Go ahead.";
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Agent";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = routeRightTurnNotice;
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Say “Agent” for questions.";
+    return;
+  }
+
+  if (agentVoiceStatus) agentVoiceStatus.textContent = "Agent";
+  if (agentVoicePrompt) agentVoicePrompt.textContent = "Voice decisions are available in Yielding Merge and Unclear Right of Way.";
+  if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Switch to a voice-enabled scenario to answer by voice.";
+}
+
+function showAgentVoicePanel() {
+  agentVoicePanel?.classList.add("is-visible");
+  setAgentPanelCollapsed(false);
+  agentVoicePanel?.setAttribute("aria-hidden", "false");
+}
+
+function setAgentPanelCollapsed(collapsed) {
+  agentVoicePanel?.classList.toggle("is-collapsed", collapsed);
+  agentCollapseButton?.setAttribute("aria-expanded", String(!collapsed));
+  agentCollapseButton?.setAttribute("aria-label", collapsed ? "Expand agent prompt" : "Collapse agent prompt");
+  document.body.classList.toggle("agent-panel-expanded", Boolean(agentVoicePanel?.classList.contains("is-visible") && !collapsed));
+}
+
+function hideAgentVoicePanel() {
+  agentVoicePanel?.classList.remove("is-visible", "is-collapsed", "is-notice");
+  agentVoicePanel?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("agent-panel-expanded");
+}
+
+function isAgentVoiceScenario(scenario = scenarioDefinitions[state.scenarioIndex]) {
+  return isAgentDecisionScenario(scenario) || scenario?.id === "route-right-turn";
+}
+
+function isAgentDecisionScenario(scenario = scenarioDefinitions[state.scenarioIndex]) {
+  return scenario?.id === "yielding" || scenario?.id === "right-of-way";
+}
+
+function promptYieldingAgentDecision(options = {}) {
+  const scenario = scenarioDefinitions[state.scenarioIndex];
+  if (!isAgentDecisionScenario(scenario)) return;
+  const isYielding = scenario.id === "yielding";
+  const activationId = options.activationId ?? state.scenarioActivationId;
+  if (options.listenAfterSpeech) state.agentAutoListen = true;
+  if (!state.routeAgentPrompted) state.routeAgentPrompted = true;
+  showAgentVoicePanel();
+  agentVoicePanel?.classList.remove("is-notice");
+  const prompt = isYielding ? yieldingAgentQuestion : rightOfWayAgentQuestion;
+  if (isYielding) {
+    state.routeAssistanceChoice = state.routeAssistanceChoice === "hold" || state.routeAssistanceChoice === "proceed"
+      ? state.routeAssistanceChoice
+      : "";
+    guidanceStatus.textContent = "Agent ask";
+    intentLabel.textContent = "Merging car ahead";
+    intentCopy.textContent = "A merging car is ahead. Assistance visuals are still off.";
+    nextMove.textContent = "Say or tap Hold to show guidance, or Proceed to keep your right of way.";
+  } else {
+    guidanceStatus.textContent = "Agent ask";
+    intentLabel.textContent = "Cross traffic waiting";
+    intentCopy.textContent = "A waiting car is holding. The agent is explaining the unclear right of way.";
+    nextMove.textContent = "Say stop/hold to mark the stop point, or continue to keep moving.";
+  }
+  if (agentVoiceStatus) agentVoiceStatus.textContent = "A gentle check-in";
+  if (agentVoicePrompt) agentVoicePrompt.textContent = prompt;
+  if (agentVoiceTranscript) {
+    agentVoiceTranscript.textContent = options.listenAfterSpeech
+      ? "I’ll listen after the prompt. You can also tap a choice."
+      : isYielding
+        ? "Listening for “hold” or “proceed.”"
+        : "Listening for “stop,” “hold,” or “continue.”";
+  }
+  setAgentVoiceDebug(options.listenAfterSpeech ? "Voice: prompt first, then listening." : "Voice: tap mic to answer.");
+  if (!state.routeAgentPromptSpoken || options.forceSpeak) {
+    state.routeAgentPromptSpoken = true;
+    speakAgent(prompt, {
+      onEnd: options.listenAfterSpeech
+        ? () => {
+            if (state.scenarioActivationId !== activationId) return;
+            startAgentListening({ activationId, skipPrompt: true });
+          }
+        : null
+    });
+  }
+  updateRouteAssistanceVisualState();
+}
+
+function showRouteRightTurnNotice(options = {}) {
+  if (!isRouteTurnScenario()) return;
+  const activationId = options.activationId ?? state.scenarioActivationId;
+  if (options.listenAfterSpeech) state.agentAutoListen = true;
+  if (!state.routeAgentPrompted) state.routeAgentPrompted = true;
+  showAgentVoicePanel();
+  agentVoicePanel?.classList.add("is-notice");
+  guidanceStatus.textContent = "Right of way";
+  intentLabel.textContent = "Yellow car waiting";
+  intentCopy.textContent = "A yellow car across the intersection is waiting to turn left onto Bohlman Rd while we prepare to turn right.";
+  nextMove.textContent = "Keep your right of way. Use the center display only if you choose to send Go ahead.";
+  if (agentVoiceStatus) agentVoiceStatus.textContent = "A gentle heads up";
+  if (agentVoicePrompt) agentVoicePrompt.textContent = routeRightTurnNotice;
+  if (agentVoiceTranscript) {
+    agentVoiceTranscript.textContent = options.listenAfterSpeech
+      ? "Listening now. Say “Agent” at any time."
+      : "Say “Agent” for questions.";
+  }
+  const shouldSpeak = !state.routeAgentPromptSpoken || options.forceSpeak;
+  if (shouldSpeak) {
+    state.routeAgentPromptSpoken = true;
+  }
+  if (options.listenAfterSpeech && !agentRecognition && !state.paused) {
+    startAgentListening({ activationId, skipPrompt: true });
+  }
+  if (shouldSpeak) speakAgent(routeRightTurnNotice);
+  updateRouteAssistanceVisualState();
+}
+
+function chooseAgentDecision(choice, source = "button", options = {}) {
+  const scenario = scenarioDefinitions[state.scenarioIndex];
+  if (scenario.id !== "yielding") {
+    if (scenario.id === "route-right-turn") showRouteRightTurnNotice();
+    if (scenario.id === "right-of-way") chooseRightOfWay(choice === "hold" ? "stop" : "follow", { fromAgent: true });
+    return;
+  }
+  const onSpoken = typeof options.onSpoken === "function" ? options.onSpoken : null;
+  state.routeAgentPrompted = true;
+  state.routeAssistanceChoice = choice;
+  showAgentVoicePanel();
+  agentVoicePanel?.classList.remove("is-notice");
+
+  if (choice === "hold") {
+    chooseYieldingMerge("yield", { fromAgent: true });
+    guidanceStatus.textContent = "Holding";
+    intentLabel.textContent = "Assistance active";
+    intentCopy.textContent = "Showing assistance visuals to hold space for the merge.";
+    nextMove.textContent = "You control the slowdown. Brake when you want to make room.";
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Holding space";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = "Hold confirmed. I’m showing the assistance visuals. You control the slowdown.";
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = source === "voice" ? "Heard: hold." : "Hold selected.";
+    speakAgent("Hold confirmed. I’m showing the assistance visuals. You control the slowdown.", { onEnd: onSpoken });
+  } else {
+    chooseYieldingMerge("proceed", { fromAgent: true });
+    guidanceStatus.textContent = "Proceed";
+    intentLabel.textContent = "Right of way";
+    intentCopy.textContent = "Proceeding without assistance visuals.";
+    nextMove.textContent = "Keep going; assistance visuals remain hidden.";
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Proceeding";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = "Proceed confirmed. I’ll keep the assistance visuals off.";
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = source === "voice" ? "Heard: proceed." : "Proceed selected.";
+    speakAgent("Proceed confirmed. I’ll keep the assistance visuals off.", { onEnd: onSpoken });
+  }
+
+  updateRouteAssistanceVisualState();
+  updateDecisionControls();
+}
+
+function speakAgent(text, options = {}) {
+  const onEnd = typeof options.onEnd === "function" ? options.onEnd : null;
+  if (!state.soundOn || !("speechSynthesis" in window)) {
+    onEnd?.();
+    return;
+  }
+  const spokenText = softenAgentSpeech(text);
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  if (!voices.length) {
+    pendingAgentSpeech = spokenText;
+    pendingAgentSpeechOnEnd = onEnd;
+    window.clearTimeout(pendingAgentSpeechTimer);
+    pendingAgentSpeechTimer = window.setTimeout(() => {
+      const queuedSpeech = pendingAgentSpeech;
+      const queuedOnEnd = pendingAgentSpeechOnEnd;
+      pendingAgentSpeech = "";
+      pendingAgentSpeechOnEnd = null;
+      speakAgentNow(queuedSpeech, { onEnd: queuedOnEnd });
+    }, 450);
+    return;
+  }
+  speakAgentNow(spokenText, { onEnd });
+}
+
+function speakAgentNow(spokenText, options = {}) {
+  const onEnd = typeof options.onEnd === "function" ? options.onEnd : null;
+  if (!spokenText || !state.soundOn || !("speechSynthesis" in window)) {
+    onEnd?.();
+    return;
+  }
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(spokenText);
+    const voice = getGentleAgentVoice();
+    if (voice) utterance.voice = voice;
+    utterance.rate = 0.78;
+    utterance.pitch = 1.04;
+    utterance.volume = 0.72;
+    if (onEnd) {
+      let finished = false;
+      let fallbackTimer = null;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(fallbackTimer);
+        onEnd();
+      };
+      fallbackTimer = window.setTimeout(
+        finish,
+        THREE.MathUtils.clamp(spokenText.length * 58, 2200, 8200)
+      );
+      utterance.addEventListener?.("end", finish);
+      utterance.addEventListener?.("error", finish);
+      utterance.onend = finish;
+      utterance.onerror = finish;
+    }
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    onEnd?.();
+    // Speech synthesis is optional; the visible notification remains the source of truth.
+  }
+}
+
+function cancelAgentSpeech() {
+  window.clearTimeout(pendingAgentSpeechTimer);
+  pendingAgentSpeech = "";
+  pendingAgentSpeechOnEnd = null;
+  if (!("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+  } catch {
+    // Speech synthesis is optional.
+  }
+}
+
+function softenAgentSpeech(text) {
+  return String(text || "")
+    .replace(/\bI see a merging car ahead\./i, "I see a merging car ahead.")
+    .replace(/\bWould you like to proceed/i, "Would you like to proceed")
+    .replace(/\bor hold space/i, "or, hold space")
+    .replace(/\bHold confirmed\./i, "Okay, holding space.")
+    .replace(/\bProceed confirmed\./i, "Okay, proceeding.")
+    .replace(/\bIncoming car is coming toward us/i, "A car is coming toward us")
+    .replace(/\bA car coming toward us/i, "A car is coming toward us")
+    .replace(/\./g, ". ")
+    .replace(/\?/g, "? ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getGentleAgentVoice() {
+  if (preferredAgentVoice) return preferredAgentVoice;
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  const usableVoices = voices
+    .filter((voice) => /^en[-_]/i.test(voice.lang || "") || /english/i.test(voice.name || ""))
+    .sort((left, right) => scoreGentleVoice(right) - scoreGentleVoice(left));
+  preferredAgentVoice = usableVoices[0] || voices[0] || null;
+  return preferredAgentVoice;
+}
+
+function scoreGentleVoice(voice) {
+  const name = String(voice.name || "").toLowerCase();
+  const lang = String(voice.lang || "").toLowerCase();
+  let score = 0;
+  if (lang === "en-us") score += 18;
+  else if (lang.startsWith("en-")) score += 12;
+  if (voice.default) score += 2;
+  if (voice.localService) score += 2;
+  if (/samantha|ava|victoria|allison|susan|nicky|karen|moira|tessa|serena/.test(name)) score += 30;
+  if (/aria|jenny|zira|google us english|google uk english female/.test(name)) score += 24;
+  if (/natural|neural|premium|enhanced|online/.test(name)) score += 14;
+  if (/female|woman/.test(name)) score += 4;
+  if (/compact|novelty|robot|zarvox|trinoids|bells|boing|bubbles|cellos|organ|whisper|hysterical|deranged/.test(name)) {
+    score -= 40;
+  }
+  return score;
+}
+
+function prepareAgentVoice() {
+  if (!("speechSynthesis" in window)) return;
+  getGentleAgentVoice();
+  const handleVoicesChanged = () => {
+    preferredAgentVoice = null;
+    getGentleAgentVoice();
+    if (!pendingAgentSpeech) return;
+    window.clearTimeout(pendingAgentSpeechTimer);
+    const queuedSpeech = pendingAgentSpeech;
+    const queuedOnEnd = pendingAgentSpeechOnEnd;
+    pendingAgentSpeech = "";
+    pendingAgentSpeechOnEnd = null;
+    speakAgentNow(queuedSpeech, { onEnd: queuedOnEnd });
+  };
+  if (typeof window.speechSynthesis.addEventListener === "function") {
+    window.speechSynthesis.addEventListener("voiceschanged", handleVoicesChanged);
+  } else {
+    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
+  }
+}
+
+function getAgentRecognitionConstructor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function setAgentListeningState(active) {
+  state.agentListening = active;
+  agentTalkButton?.classList.toggle("is-listening", active);
+  agentTalkButton?.setAttribute("aria-pressed", String(active));
+}
+
+function showAgentMicBlockedMessage() {
+  const scenario = scenarioDefinitions[state.scenarioIndex];
+  if (agentVoiceStatus) agentVoiceStatus.textContent = "Mic access needed";
+  if (agentVoiceTranscript) {
+    agentVoiceTranscript.textContent =
+      scenario?.id === "route-right-turn"
+        ? "Allow microphone access, then tap the mic again. You can still use the center display."
+        : "Allow microphone access, then tap the mic again. You can still tap Hold or Proceed.";
+  }
+  setAgentVoiceDebug("Voice error: microphone permission blocked.");
+}
+
+function setAgentVoiceDebug(message) {
+  if (agentVoiceDebug) agentVoiceDebug.textContent = message;
+}
+
+async function startAgentListening(options = {}) {
+  const scenario = scenarioDefinitions[state.scenarioIndex];
+  const activationId = options.activationId ?? state.scenarioActivationId;
+  const routeWakeMode = scenario.id === "route-right-turn";
+  const decisionMode = isAgentDecisionScenario(scenario);
+
+  if (!routeWakeMode && !decisionMode) {
+    showAgentVoicePanel();
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Agent";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = "Voice decisions are available in Yielding Merge and Unclear Right of Way.";
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Select scenario 01 or 04 first.";
+    setAgentVoiceDebug("Voice: switch to a voice-enabled scenario.");
+    return;
+  }
+
+  state.agentAutoListen = true;
+  if (routeWakeMode && !options.skipPrompt && (options.forceSpeak || !state.routeAgentPromptSpoken)) {
+    showRouteRightTurnNotice({
+      activationId,
+      forceSpeak: true,
+      listenAfterSpeech: true
+    });
+    return;
+  }
+
+  if (decisionMode && !options.skipPrompt && (options.forceSpeak || !state.routeAgentPromptSpoken)) {
+    promptYieldingAgentDecision({
+      activationId,
+      forceSpeak: true,
+      listenAfterSpeech: true
+    });
+    return;
+  }
+
+  if (routeWakeMode && state.routeAgentConversationActive) {
+    showAgentVoicePanel();
+    agentVoicePanel?.classList.add("is-notice");
+    if (agentVoicePrompt) {
+      agentVoicePrompt.textContent = state.routeAgentAwaitingRequest
+        ? "What can I help you with?"
+        : state.routeAgentLastResponse || "Say “Agent” whenever you want to ask something.";
+    }
+  } else if (routeWakeMode) {
+    showRouteRightTurnNotice({ activationId });
+  } else {
+    promptYieldingAgentDecision({ activationId });
+  }
+  const Recognition = getAgentRecognitionConstructor();
+  if (!Recognition) {
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Tap a choice";
+    if (agentVoiceTranscript) {
+      agentVoiceTranscript.textContent = "Speech recognition isn’t available in this browser. Use the on-screen choices.";
+    }
+    setAgentVoiceDebug("Voice unsupported: SpeechRecognition is missing in this browser.");
+    return;
+  }
+
+  if (state.scenarioActivationId !== activationId || !isAgentVoiceScenario()) return;
+
+  stopAgentListening({ keepAuto: true });
+  const recognition = new Recognition();
+  agentRecognition = recognition;
+  recognition.lang = "en-US";
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 3;
+  recognition.continuous = true;
+  setAgentListeningState(true);
+  if (agentVoiceStatus) agentVoiceStatus.textContent = "Listening";
+  if (agentVoiceTranscript) {
+    agentVoiceTranscript.textContent =
+      routeWakeMode
+        ? state.routeAgentAwaitingRequest
+          ? "Listening now. Ask your question."
+          : "Listening now. Say “Agent.”"
+        : scenario.id === "yielding"
+        ? "Listening now. Say “hold” or “proceed.”"
+        : "Listening now. Say “stop,” “hold,” or “continue.”";
+  }
+  setAgentVoiceDebug("Voice: starting recognizer...");
+
+  recognition.addEventListener("result", (event) => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    const resultStart = Math.max(0, event.resultIndex ?? 0);
+    const results = Array.from(event.results || []).slice(resultStart);
+    const transcript = results
+      .map((result) => result?.[0]?.transcript || "")
+      .join(" ")
+      .trim();
+    const hasFinalResult = results.some((result) => result?.isFinal !== false);
+    setAgentVoiceDebug(transcript ? `Voice heard: ${transcript}` : "Voice heard: empty transcript.");
+    if (!hasFinalResult) return;
+    handleAgentVoiceCommand(transcript, activationId);
+  });
+  recognition.addEventListener("start", () => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    setAgentVoiceDebug("Voice: recognizer started.");
+  });
+  recognition.addEventListener("audiostart", () => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    setAgentVoiceDebug("Voice: microphone audio started.");
+  });
+  recognition.addEventListener("soundstart", () => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    setAgentVoiceDebug("Voice: sound detected.");
+  });
+  recognition.addEventListener("speechstart", () => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    setAgentVoiceDebug("Voice: speech detected.");
+  });
+  recognition.addEventListener("nomatch", () => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Try again";
+    if (agentVoiceTranscript) {
+      agentVoiceTranscript.textContent = routeWakeMode
+        ? state.routeAgentAwaitingRequest
+          ? "I heard something but could not match it. Ask your question again."
+          : "I heard something but could not match it. Say “Agent.”"
+        : "I heard something but could not match it. Say Hold or Proceed.";
+    }
+    setAgentVoiceDebug("Voice: no match returned.");
+  });
+  recognition.addEventListener("error", (event) => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    agentRecognition = null;
+    setAgentListeningState(false);
+    setAgentVoiceDebug(`Voice error: ${event.error || "unknown"}.`);
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      agentMicBlocked = true;
+      showAgentMicBlockedMessage();
+      return;
+    }
+    if (event.error === "no-speech") {
+      if (agentVoiceStatus) agentVoiceStatus.textContent = "Try again";
+      if (agentVoiceTranscript) {
+        agentVoiceTranscript.textContent = routeWakeMode
+          ? state.routeAgentAwaitingRequest
+            ? "I didn’t catch your question. I’m listening again."
+            : "I didn’t catch “Agent.” I’m listening again."
+          : "I didn’t catch that. I’m listening again.";
+      }
+      scheduleAgentListeningRestart(activationId);
+      return;
+    }
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Tap a choice";
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Voice input paused. I’ll try listening again.";
+    scheduleAgentListeningRestart(activationId);
+  });
+  recognition.addEventListener("end", () => {
+    if (agentRecognition !== recognition || state.scenarioActivationId !== activationId) return;
+    agentRecognition = null;
+    setAgentListeningState(false);
+    setAgentVoiceDebug("Voice: listening ended.");
+    if (state.agentAutoListen && isAgentVoiceScenario() && !state.paused) {
+      scheduleAgentListeningRestart(activationId);
+    } else if (!state.routeAssistanceChoice && agentVoiceStatus?.textContent === "Listening") {
+      agentVoiceStatus.textContent = "Tap or speak";
+      if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Tap the mic again to answer by voice, or tap a choice.";
+    }
+  });
+  try {
+    recognition.start();
+  } catch {
+    if (agentRecognition === recognition) agentRecognition = null;
+    setAgentListeningState(false);
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Try again";
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = "Voice input did not start. Tap the mic again, or tap a choice.";
+    setAgentVoiceDebug("Voice error: recognizer start failed.");
+    scheduleAgentListeningRestart(activationId, 900);
+  }
+}
+
+function scheduleAgentListeningRestart(activationId = state.scenarioActivationId, delay = 450) {
+  if (!state.agentAutoListen || state.paused || !isAgentVoiceScenario()) return;
+  window.setTimeout(() => {
+    if (!state.agentAutoListen || state.paused || state.scenarioActivationId !== activationId || !isAgentVoiceScenario()) return;
+    if (agentRecognition) return;
+    startAgentListening({ activationId, skipPrompt: true });
+  }, delay);
+}
+
+function stopAgentListening(options = {}) {
+  if (!options.keepAuto) state.agentAutoListen = false;
+  if (!agentRecognition) return;
+  const recognition = agentRecognition;
+  agentRecognition = null;
+  try {
+    recognition.abort?.();
+    recognition.stop?.();
+  } catch {
+    // The recognition session may already be closed.
+  }
+  setAgentListeningState(false);
+}
+
+function handleAgentVoiceCommand(transcript, activationId = state.scenarioActivationId) {
+  const scenario = scenarioDefinitions[state.scenarioIndex];
+  if (activationId !== state.scenarioActivationId || !isAgentVoiceScenario(scenario)) return;
+  const normalized = transcript.toLowerCase();
+  if (agentVoiceTranscript) agentVoiceTranscript.textContent = transcript ? `Heard: “${transcript}”` : "No speech detected.";
+  if (scenario.id === "route-right-turn") {
+    handleRouteAgentWakeCommand(normalized, transcript, activationId);
+    return;
+  }
+  const wantsHold = /\b(hold|old|wait|yield|stop|halt|pause)\b/.test(normalized) || /\b(slow down|make space|hold space|mark the stop|show visuals|show visual)\b/.test(normalized);
+  const wantsProceed = /\b(proceed|continue|go|go ahead|right of way|keep going|drive|keep rolling|keep moving|carry on)\b/.test(normalized);
+  const command = wantsHold ? "hold" : wantsProceed ? "proceed" : "";
+  if (!command) {
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "One more time";
+    const clarification = scenario.id === "yielding"
+      ? "I can proceed or hold. Please say one of those."
+      : "I can stop, hold, or continue. Please say one of those.";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = clarification;
+    stopAgentListening({ keepAuto: true });
+    speakAgent(clarification, {
+      onEnd: () => scheduleAgentListeningRestart(activationId, 150)
+    });
+    return;
+  }
+
+  if (state.lastAgentCommand === command && state.time - state.lastAgentCommandAt < 1.8) return;
+  state.lastAgentCommand = command;
+  state.lastAgentCommandAt = state.time;
+  stopAgentListening({ keepAuto: true });
+  const restartAfterSpeech = () => {
+    if (state.agentAutoListen) scheduleAgentListeningRestart(activationId, 150);
+  };
+
+  if (scenario.id === "yielding") {
+    chooseAgentDecision(command === "hold" ? "hold" : "proceed", "voice", { onSpoken: restartAfterSpeech });
+  } else {
+    chooseRightOfWay(command === "hold" ? "stop" : "follow", { fromAgent: true });
+    const phrase = command === "hold" ? "Stop point marked. You control the slowdown." : "Continue confirmed. Keep rolling.";
+    if (agentVoiceStatus) agentVoiceStatus.textContent = command === "hold" ? "Stop point marked" : "Continuing";
+    if (agentVoicePrompt) agentVoicePrompt.textContent = phrase;
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = command === "hold" ? "Heard: hold." : "Heard: continue.";
+    speakAgent(phrase, { onEnd: restartAfterSpeech });
+  }
+}
+
+function handleRouteAgentWakeCommand(normalized, transcript, activationId) {
+  const heardWakeWord = hasAgentWakeWord(normalized);
+  const requestAfterWake = heardWakeWord ? getAgentRequestAfterWake(transcript) : "";
+  if (state.routeAgentAwaitingRequest) {
+    if (requestAfterWake || !heardWakeWord) {
+      answerRouteAgentRequest(requestAfterWake || transcript, activationId);
+    } else if (agentVoiceTranscript) {
+      agentVoiceTranscript.textContent = "Listening now. Ask me anything about the drive.";
+    }
+    return;
+  }
+
+  if (!heardWakeWord) {
+    if (agentVoiceStatus) agentVoiceStatus.textContent = "Listening";
+    if (agentVoicePrompt && !state.routeAgentConversationActive) {
+      agentVoicePrompt.textContent = "Say “Agent” whenever you want to ask something.";
+    }
+    if (agentVoiceTranscript) agentVoiceTranscript.textContent = transcript ? `Heard: “${transcript}”` : "Listening for “Agent.”";
+    return;
+  }
+
+  if (state.lastAgentCommand === "agent-wake" && state.time - state.lastAgentCommandAt < 1.8) return;
+  state.lastAgentCommand = "agent-wake";
+  state.lastAgentCommandAt = state.time;
+  state.routeAgentConversationActive = true;
+  if (requestAfterWake) {
+    sendCenterDisplayAgentWake("Agent", "What can I help you with?");
+    answerRouteAgentRequest(requestAfterWake, activationId);
+    return;
+  }
+  state.routeAgentAwaitingRequest = true;
+  stopAgentListening({ keepAuto: true });
+  showAgentVoicePanel();
+  agentVoicePanel?.classList.add("is-notice");
+  const prompt = "What can I help you with?";
+  if (agentVoiceStatus) agentVoiceStatus.textContent = "Agent";
+  if (agentVoicePrompt) agentVoicePrompt.textContent = prompt;
+  if (agentVoiceTranscript) agentVoiceTranscript.textContent = transcript ? `Heard: “${transcript}”` : "Heard: “Agent.”";
+  setAgentVoiceDebug("Voice: wake word detected.");
+  sendCenterDisplayAgentWake(transcript, prompt);
+  speakAgent(prompt, {
+    onEnd: () => {
+      if (state.agentAutoListen) scheduleAgentListeningRestart(activationId, 300);
+    }
+  });
+}
+
+function answerRouteAgentRequest(transcript, activationId) {
+  state.routeAgentAwaitingRequest = false;
+  state.routeAgentConversationActive = true;
+  stopAgentListening({ keepAuto: true });
+  showAgentVoicePanel();
+  agentVoicePanel?.classList.add("is-notice");
+  const answer = getRouteAgentAnswer(transcript);
+  state.routeAgentLastQuestion = String(transcript || "").trim();
+  state.routeAgentLastResponse = answer;
+  if (agentVoiceStatus) agentVoiceStatus.textContent = "Agent";
+  if (agentVoicePrompt) agentVoicePrompt.textContent = answer;
+  if (agentVoiceTranscript) agentVoiceTranscript.textContent = transcript ? `Question: “${transcript}”` : "Question received.";
+  setAgentVoiceDebug("Voice: agent request answered.");
+  sendCenterDisplayAgentReply(transcript, answer);
+  speakAgent(answer, {
+    onEnd: () => {
+      if (state.agentAutoListen) scheduleAgentListeningRestart(activationId, 300);
+    }
+  });
+}
+
+function hasAgentWakeWord(normalized) {
+  const cleaned = String(normalized || "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /\b(agent|agents)\b/.test(cleaned) || /\ba\s+gent\b/.test(cleaned) || /\bhey\s+jen\b/.test(cleaned);
+}
+
+function getAgentRequestAfterWake(transcript) {
+  const spoken = String(transcript || "").trim();
+  const wakeMatch = /\b(?:agents?|a\s+gent|hey\s+jen)\b/i.exec(spoken);
+  if (!wakeMatch) return "";
+  return spoken
+    .slice((wakeMatch.index || 0) + wakeMatch[0].length)
+    .replace(/^[\s,.:;!?-]+/, "")
+    .trim();
+}
+
+function getRouteAgentAnswer(transcript = "") {
+  const request = String(transcript || "").toLowerCase();
+  if (/\b(speed|fast|mph|miles per hour)\b/.test(request)) {
+    return `We’re traveling at ${Math.round(state.speed)} miles per hour. You remain in control of the gas and brake.`;
+  }
+  if (/\b(where|route|road|turn|destination|direction|navigation)\b/.test(request)) {
+    if (state.routeTurnComplete) {
+      const remaining = Math.max(0, routeDestinationDistance - state.routeSideDistance);
+      return remaining > 8
+        ? `We’re on Bohlman Road with about ${Math.round(remaining)} feet remaining in this scenario.`
+        : "We’ve reached the end of this route scenario.";
+    }
+    if (state.routeTurnActive) return "We’re turning right onto Bohlman Road. Keep steering through the curve.";
+    return "The route continues ahead, then turns right onto Bohlman Road.";
+  }
+  if (/\b(send|sent|message|go ahead|thank|communication)\b/.test(request)) {
+    if (state.centerDisplayThankYouAt !== null) return "The other vehicle’s thank-you was received.";
+    if (state.centerDisplayGoAheadSentAt !== null) return "Go ahead was sent successfully.";
+    return "No vehicle message has been sent yet.";
+  }
+  if (/\b(car|vehicle|traffic|right of way|yellow|happening|situation)\b/.test(request)) {
+    if (state.centerDisplayThankYouAt !== null) {
+      return "The other vehicle thanked you and is clearing the turn. Continue when the path is clear.";
+    }
+    if (state.centerDisplayGoAheadSentAt !== null) {
+      return "Go ahead was sent, and the other vehicle is moving through the turn.";
+    }
+    return "The other vehicle is waiting across the intersection. You currently have right of way.";
+  }
+  if (/\b(help|can you|what can|options|do)\b/.test(request)) {
+    return "I can help with the route, current speed, right of way, or vehicle-message status.";
+  }
+  if (!request.trim()) return "What would you like help with?";
+  return "I heard your request. I can help with the current route, speed, driving situation, or vehicle communication.";
+}
+
+function updateRouteAssistanceVisualState() {
+  const scenario = scenarioDefinitions[state.scenarioIndex];
+  const shouldShowRoute = scenario?.id === "route-right-turn";
+  const shouldShowStopBar = scenario?.id === "right-of-way" && state.decisionMade && state.decisionChoice === "stop";
+  routeWorldGroup.visible = shouldShowRoute;
+  hazardGroup.children.forEach((child) => {
+    if (child.name === "intersectionStopBar" && child.material) {
+      child.material.opacity = shouldShowStopBar ? 0.74 : 0;
+    }
+  });
+  document.documentElement.dataset.routeAssistanceChoice = state.routeAssistanceChoice || "none";
+  document.documentElement.dataset.routeAssistanceVisuals = String(shouldShowRoute);
+  document.documentElement.dataset.yieldingAssistanceVisuals = String(
+    scenarioDefinitions[state.scenarioIndex]?.id === "yielding" && state.routeAssistanceChoice === "hold"
+  );
+}
+
+function showSenderPerspective(message) {
+  const messageId = message?.message?.id || "goahead";
+  const style = communicationStyles[messageId] || communicationStyles.goahead;
+  const recipientLabel = message?.recipient?.label || "detected recipient";
+  const mode = message?.recipient?.mode === "broadcast" ? "Broadcast" : "Detected recipient";
+  const activationId = state.scenarioActivationId;
+  if (messageId === "goahead") {
+    state.centerDisplayGoAheadSentAt = state.time;
+    state.centerDisplayThankYouAt = null;
+    guidanceStatus.textContent = "Go ahead sent";
+    intentLabel.textContent = "Yellow car moving";
+    intentCopy.textContent = "The yellow car has been invited to turn left onto Bohlman Rd.";
+    nextMove.textContent = "Hold your position and let the yellow car clear before continuing.";
+  }
+  state.senderPerspectiveUntil = performance.now() + senderPerspectiveDuration;
+  senderPerspective?.classList.add("is-visible");
+  senderPerspective?.setAttribute("aria-hidden", "false");
+  const senderPerspectiveKicker = senderPerspective?.querySelector("small");
+  if (senderPerspectiveKicker) senderPerspectiveKicker.textContent = "Sender perspective";
+  if (senderPerspectiveIcon) {
+    senderPerspectiveIcon.style.background = style.color;
+    senderPerspectiveIcon.innerHTML = `<i data-lucide="send"></i>`;
+  }
+  if (senderPerspectiveTitle) senderPerspectiveTitle.textContent = `${style.label} sent`;
+  if (senderPerspectiveDetail) senderPerspectiveDetail.textContent = `${mode}: ${recipientLabel}. Confirmation received.`;
+  createIcons({ icons });
+  speakAgent(messageId === "goahead" ? "Sent Go ahead." : `${style.label} sent to ${recipientLabel}.`);
+  if (messageId === "goahead") {
+    window.setTimeout(() => {
+      if (state.scenarioActivationId !== activationId) return;
+      showSimulatorThankYouReceived(message);
+    }, 2800);
+  }
+}
+
+function showSimulatorThankYouReceived(originalMessage) {
+  const senderLabel = originalMessage?.recipient?.label || "Yellow car";
+  state.centerDisplayThankYouAt = state.time;
+  state.senderPerspectiveUntil = performance.now() + senderPerspectiveDuration;
+  senderPerspective?.classList.add("is-visible");
+  senderPerspective?.setAttribute("aria-hidden", "false");
+  const senderPerspectiveKicker = senderPerspective?.querySelector("small");
+  if (senderPerspectiveKicker) senderPerspectiveKicker.textContent = "Received";
+  if (senderPerspectiveIcon) {
+    senderPerspectiveIcon.style.background = communicationStyles.thanks.color;
+    senderPerspectiveIcon.innerHTML = `<i data-lucide="heart"></i>`;
+  }
+  if (senderPerspectiveTitle) senderPerspectiveTitle.textContent = "Thank you received";
+  if (senderPerspectiveDetail) senderPerspectiveDetail.textContent = `${senderLabel} acknowledged your Go ahead.`;
+  guidanceStatus.textContent = "Thank you";
+  intentLabel.textContent = "Yellow car clearing";
+  intentCopy.textContent = "The yellow car is completing the turn.";
+  nextMove.textContent = "Wait a moment, then continue when the path is clear.";
+  speakAgent(`Thank you received from the ${senderLabel.toLowerCase()}.`);
+  createIcons({ icons });
+}
+
+function updateSenderPerspectiveVisibility() {
+  const visible = performance.now() < state.senderPerspectiveUntil;
+  senderPerspective?.classList.toggle("is-visible", visible);
+  senderPerspective?.setAttribute("aria-hidden", String(!visible));
 }
 
 function shiftScenarioTime(value, scenario) {
@@ -1637,7 +2577,7 @@ function rebuildOverlays(scenario) {
   overlayGroup.clear();
   hazardGroup.children.forEach((child) => {
     if (child.name === "intersectionStopBar") {
-      child.material.opacity = scenario.id === "right-of-way" ? 0.74 : scenario.id === "route-right-turn" ? 0.46 : 0.0;
+      child.material.opacity = 0.0;
     }
   });
 
@@ -2776,6 +3716,20 @@ function bindCenterDisplayConeEvents() {
     if (message?.type === "CLEAR_CONE") {
       clearCenterDisplayCone();
     }
+    if (message?.type === "CENTER_DISPLAY_MESSAGE_SENT") {
+      const commandKey = [
+        message?.source || "",
+        message?.sentAt || "",
+        message?.message?.id || "",
+        message?.recipient?.id || "",
+        message?.recipient?.vehicleName || ""
+      ].join(":");
+      const now = performance.now();
+      if (commandKey && commandKey === lastCenterDisplayCommandKey && now - lastCenterDisplayCommandAt < 1500) return;
+      lastCenterDisplayCommandKey = commandKey;
+      lastCenterDisplayCommandAt = now;
+      showSenderPerspective(message);
+    }
   };
 
   if ("BroadcastChannel" in window) {
@@ -2912,6 +3866,34 @@ function publishCenterDisplayTelemetry(options = {}) {
   centerDisplaySocket.send(JSON.stringify(telemetry));
 }
 
+function sendCenterDisplayAgentWake(transcript, assistantPrompt = "What can I help you with?") {
+  const message = {
+    type: "CENTER_DISPLAY_AGENT_WAKE",
+    protocolVersion: 1,
+    sentAt: Date.now(),
+    source: "simulator-agent",
+    transcript: String(transcript || "Agent").trim(),
+    assistantPrompt
+  };
+  if (centerDisplaySocket?.readyState === WebSocket.OPEN) {
+    centerDisplaySocket.send(JSON.stringify(message));
+  }
+}
+
+function sendCenterDisplayAgentReply(transcript, answer) {
+  const message = {
+    type: "CENTER_DISPLAY_AGENT_REPLY",
+    protocolVersion: 1,
+    sentAt: Date.now(),
+    source: "simulator-agent",
+    transcript: String(transcript || "").trim(),
+    answer
+  };
+  if (centerDisplaySocket?.readyState === WebSocket.OPEN) {
+    centerDisplaySocket.send(JSON.stringify(message));
+  }
+}
+
 function createCenterDisplayTelemetry() {
   const scenario = scenarioDefinitions[state.scenarioIndex];
   const route = scenario.route ?? {
@@ -2936,6 +3918,7 @@ function createCenterDisplayTelemetry() {
       targetSpeed: roundTelemetryValue(state.targetSpeed),
       roadOffset: roundTelemetryValue(state.roadOffset),
       scenarioElapsed: roundTelemetryValue(state.scenarioElapsed),
+      scenarioActivationId: state.scenarioActivationId,
       lateral: roundTelemetryValue(state.lateral),
       paused: state.paused,
       inputMode: state.inputMode,
@@ -2945,6 +3928,11 @@ function createCenterDisplayTelemetry() {
       routeDriveStarted: state.routeDriveStarted,
       routeSideDistance: roundTelemetryValue(state.routeSideDistance),
       routeDestinationRemaining: roundTelemetryValue(Math.max(0, routeDestinationDistance - state.routeSideDistance)),
+      routeAgentPrompted: state.routeAgentPrompted,
+      routeAssistanceChoice: state.routeAssistanceChoice || "none",
+      centerDisplayGoAheadSent: state.centerDisplayGoAheadSentAt !== null,
+      routeAssistanceVisuals: isRouteTurnScenario(),
+      yieldingAssistanceVisuals: scenario.id === "yielding" && state.routeAssistanceChoice === "hold",
       trafficSignalPhase: getTrafficSignalPhase(),
       routeTurnActive: state.routeTurnActive,
       routeTurnComplete: state.routeTurnComplete,
@@ -3162,6 +4150,19 @@ function bindControls() {
     pauseToggle.classList.toggle("is-active", state.paused);
     pauseToggle.setAttribute("aria-pressed", String(state.paused));
     setEmergencySirenActive(!state.paused && scenarioDefinitions[state.scenarioIndex].id === "emergency");
+    if (state.paused) {
+      stopAgentListening({ keepAuto: true });
+    } else if (isAgentVoiceScenario()) {
+      const activationId = state.scenarioActivationId;
+      const scenario = scenarioDefinitions[state.scenarioIndex];
+      if (scenario.id === "route-right-turn") {
+        startAgentListening({ activationId, skipPrompt: state.routeAgentPromptSpoken });
+      } else if (!state.routeAgentPromptSpoken) {
+        promptYieldingAgentDecision({ activationId, forceSpeak: true, listenAfterSpeech: true });
+      } else {
+        startAgentListening({ activationId, skipPrompt: true });
+      }
+    }
   });
 
   keyboardMode?.addEventListener("click", () => setInputMode("keyboard"));
@@ -3174,8 +4175,24 @@ function bindControls() {
     startWheelWakeScan(8000);
   });
 
-  stopChoice?.addEventListener("click", () => chooseScenarioDecision("stop"));
-  pathChoice?.addEventListener("click", () => chooseScenarioDecision("follow"));
+  stopChoice?.addEventListener("click", () => {
+    if (scenarioDefinitions[state.scenarioIndex]?.id === "yielding") chooseAgentDecision("hold");
+    else chooseScenarioDecision("stop");
+  });
+  pathChoice?.addEventListener("click", () => {
+    if (scenarioDefinitions[state.scenarioIndex]?.id === "yielding") chooseAgentDecision("proceed");
+    else chooseScenarioDecision("follow");
+  });
+  agentTalkButton?.addEventListener("click", () => {
+    agentMicBlocked = false;
+    startAgentListening({ fromUser: true });
+  });
+  agentHoldChoice?.addEventListener("click", () => chooseAgentDecision("hold"));
+  agentProceedChoice?.addEventListener("click", () => chooseAgentDecision("proceed"));
+  agentCollapseButton?.addEventListener("click", () => {
+    const shouldCollapse = !agentVoicePanel?.classList.contains("is-collapsed");
+    setAgentPanelCollapsed(shouldCollapse);
+  });
 
   speedUp?.addEventListener("click", () => changeSpeed(4));
   speedDown?.addEventListener("click", () => changeSpeed(-4));
@@ -3212,7 +4229,7 @@ function bindControls() {
         updateKeyboardDriveInput();
       }
     }
-    if (/^[1-5]$/.test(event.key)) activateScenario(Number(event.key) - 1);
+    if (/^[1-6]$/.test(event.key)) activateScenario(Number(event.key) - 1, { fromUser: true });
   });
 
   window.addEventListener("keyup", (event) => {
@@ -3773,6 +4790,7 @@ function updateWheelInput(delta) {
   const gamepad = getActiveWheelInput();
   if (!gamepad) {
     if (wheelInput.connected) disconnectWheelInput();
+    if (!isKeyboardDrivingEnabled()) state.visualSteeringAxis = 0;
     updateSteeringReadout(0);
     return;
   }
@@ -3786,6 +4804,7 @@ function updateWheelInput(delta) {
     wheelInput.gasAmount = 0;
     wheelInput.brakeAmount = 0;
     wheelInput.proceedButtonHeld = false;
+    state.visualSteeringAxis = getKeyboardSteeringAxis();
     if (wheelInput.brakeHeld) {
       wheelInput.brakeHeld = false;
       setHoldInput("wheel", false);
@@ -3797,6 +4816,7 @@ function updateWheelInput(delta) {
 
   const axis = normalizeWheelAxis(gamepad.axes[wheelInput.axis] ?? 0);
   const steeringAxis = applyWheelResponseCurve(axis);
+  state.visualSteeringAxis = steeringAxis;
   const routeSteerIntent = THREE.MathUtils.clamp(steeringAxis, 0, 1);
   state.routeTurnSteerIntent = THREE.MathUtils.clamp(routeSteerIntent, 0, 1);
   if (state.routeTurnActive) {
@@ -3829,7 +4849,12 @@ function getKeyboardSteeringAxis() {
 
 function applyKeyboardSteeringInput(delta) {
   const axis = getKeyboardSteeringAxis();
-  if (axis === 0) return false;
+  state.visualSteeringAxis = axis;
+  if (axis === 0) {
+    wheelInput.lastAxis = 0;
+    updateSteeringReadout(0);
+    return false;
+  }
 
   const steeringAxis = THREE.MathUtils.clamp(axis, -1, 1);
   const routeSteerIntent = THREE.MathUtils.clamp(steeringAxis, 0, 1);
@@ -4012,8 +5037,10 @@ function updateKeyboardDriveInput() {
   const keyboardDriving = isKeyboardDrivingEnabled();
   state.keyboardGasHeld = keyboardDriving && keyboardDriveKeys.has("gas");
   setHoldInput("keyboard", keyboardDriving && keyboardDriveKeys.has("brake"));
+  state.visualSteeringAxis = keyboardDriving ? getKeyboardSteeringAxis() : 0;
+  wheelInput.lastAxis = state.visualSteeringAxis;
   if (state.keyboardGasHeld && isRouteTurnScenario()) state.routeDriveStarted = true;
-  updateSteeringReadout(wheelInput.lastAxis || 0);
+  updateSteeringReadout(state.visualSteeringAxis);
 }
 
 function chooseScenarioDecision(choice) {
@@ -4064,6 +5091,11 @@ function setSpaceHeld(held) {
   }
 
   const scenario = scenarioDefinitions[state.scenarioIndex];
+  if (scenario.id === "yielding" && held && state.routeAssistanceChoice !== "hold") {
+    chooseAgentDecision("hold", "brake");
+    return;
+  }
+
   if (scenario.id === "yielding") {
     if (held) {
       chooseYieldingMerge("yield", { fromSpace: true });
@@ -4113,23 +5145,22 @@ function chooseYieldingMerge(choice, options = {}) {
   if (isNewChoice) state.yieldingChoiceTime = state.time;
 
   if (choice === "yield") {
-    state.targetSpeed = options.fromSpace || state.spaceHeld ? 9 : 12;
-    guidanceStatus.textContent = state.spaceHeld ? "Holding" : "Slowing";
+    guidanceStatus.textContent = state.spaceHeld ? "Holding" : "Visuals on";
     intentLabel.textContent = "Merging car";
-    intentCopy.textContent = "Opening space for the merge.";
-    nextMove.textContent = state.spaceHeld ? "Hold Space/brake: let them in." : "Slow and let them in.";
+    intentCopy.textContent = "Assistance visuals are showing where to hold space.";
+    nextMove.textContent = state.spaceHeld ? "You are braking to make room." : "You control speed. Brake when you want to hold the gap.";
   } else {
     state.targetSpeed = scenario.recommendedSpeed ?? 26;
     guidanceStatus.textContent = "Proceed";
     intentLabel.textContent = "Forward path";
-    intentCopy.textContent = "Merging car is waiting.";
-    nextMove.textContent = "Follow the continuous forward path.";
+    intentCopy.textContent = "Keeping your right of way without assistance visuals.";
+    nextMove.textContent = "Continue forward; visuals remain hidden.";
   }
 
   updateDecisionControls();
 }
 
-function chooseRightOfWay(choice) {
+function chooseRightOfWay(choice, options = {}) {
   const scenario = scenarioDefinitions[state.scenarioIndex];
   if (scenario.id !== "right-of-way") return;
 
@@ -4142,22 +5173,20 @@ function chooseRightOfWay(choice) {
     state.stopStartSpeed = Math.max(state.speed, 24);
     state.stopDecisionTime = state.time;
     state.rightOfWayYieldTime = null;
-    state.targetSpeed = 0;
-    guidanceStatus.textContent = "Braking";
-    intentLabel.textContent = "Slowing";
-    intentCopy.textContent = "Stopping at stop point.";
-    nextMove.textContent = "Stop point.";
+    guidanceStatus.textContent = "Stop point";
+    intentLabel.textContent = "Hold point marked";
+    intentCopy.textContent = "The stop point is marked. You control whether to slow or keep rolling.";
+    nextMove.textContent = "Brake when you want to stop and let them turn.";
   } else {
     state.rightOfWayStopZ = null;
     state.rightOfWayStopMarkerStartZ = null;
     state.stopStartSpeed = 0;
     state.stopDecisionTime = 0;
     state.rightOfWayYieldTime = null;
-    state.targetSpeed = 22;
-    guidanceStatus.textContent = "Best path";
+    guidanceStatus.textContent = options.fromAgent ? "Continuing" : "Best path";
     intentLabel.textContent = "Continue";
-    intentCopy.textContent = "Override: forward path is clear.";
-    nextMove.textContent = "Follow the continuous forward path.";
+    intentCopy.textContent = "Continuing through the unclear right-of-way moment.";
+    nextMove.textContent = "Keep moving. You remain in control.";
   }
 
   updateDecisionControls();
@@ -4210,32 +5239,36 @@ function updateDecisionControls() {
   const hasChoices = isRightOfWay || isYielding;
   interpretationPanel?.classList.toggle("has-decisions", hasChoices);
   interpretationPanel?.classList.toggle("is-yielding", isYielding);
+  interpretationPanel?.classList.toggle("is-ambiguous", isRightOfWay);
   decisionPanel?.setAttribute("aria-hidden", String(!hasChoices));
 
   if (!hasChoices) return;
 
   if (isYielding) {
-    setDecisionButtonText(stopChoice, "Slow", "Space / brake", "Recommended");
-    setDecisionButtonText(pathChoice, "Proceed", "Forward path", "If clear");
+    setDecisionButtonText(stopChoice, "Hold", "Show assistance", "Recommended");
+    setDecisionButtonText(pathChoice, "Proceed", "Keep right of way", "No visuals");
     stopChoice.classList.toggle("is-recommended", true);
     stopChoice.classList.toggle("is-active", state.decisionChoice === "yield");
     pathChoice.classList.toggle("is-active", state.decisionChoice === "proceed");
 
     if (!state.decisionMade) {
       guidanceStatus.textContent = "Choice";
-      intentLabel.textContent = "Merging car";
-      intentCopy.textContent = "Right-lane car is waiting for space.";
-      nextMove.textContent = "Hold Space or brake to slow.";
+      intentLabel.textContent = "Merging car ahead";
+      intentCopy.textContent = "No assistance visuals are active until you choose Hold.";
+      nextMove.textContent = "Say or tap Hold to show guidance, or Proceed to keep going.";
     } else if (state.decisionChoice === "yield") {
-      guidanceStatus.textContent = state.spaceHeld ? "Holding" : "Proceeding";
+      guidanceStatus.textContent = state.spaceHeld || state.routeAssistanceChoice === "hold" ? "Holding" : "Proceeding";
       intentLabel.textContent = "Merging car";
       intentCopy.textContent = "Opening space for the merge.";
-      nextMove.textContent = state.spaceHeld ? "Hold Space/brake: let them in." : "Continue after yielding.";
+      nextMove.textContent =
+        state.spaceHeld || state.routeAssistanceChoice === "hold"
+          ? "Hold space and let them in."
+          : "Continue after yielding.";
     } else {
       guidanceStatus.textContent = "Proceed";
       intentLabel.textContent = "Forward path";
-      intentCopy.textContent = "Merging car is waiting.";
-      nextMove.textContent = "Follow the continuous forward path.";
+      intentCopy.textContent = "Keeping your right of way without assistance visuals.";
+      nextMove.textContent = "Continue forward; visuals remain hidden.";
     }
     return;
   }
@@ -4247,10 +5280,10 @@ function updateDecisionControls() {
   pathChoice.classList.toggle("is-active", isRightOfWay && state.decisionChoice === "follow" && state.decisionMade);
 
   if (isRightOfWay && !state.decisionMade) {
-    guidanceStatus.textContent = "Decision";
-    intentLabel.textContent = "Waiting car";
-    intentCopy.textContent = "Stop point is before it.";
-    nextMove.textContent = "Stop at stop point.";
+    guidanceStatus.textContent = "Unclear";
+    intentLabel.textContent = "Right of way unclear";
+    intentCopy.textContent = "A vehicle is waiting at the crossing. Choose how you want to move through it.";
+    nextMove.textContent = "Say stop or hold, or continue when you are ready.";
   } else if (isRightOfWay && state.decisionChoice === "follow") {
     guidanceStatus.textContent = "Best path";
     intentLabel.textContent = "Continue";
@@ -4296,7 +5329,7 @@ function requestRouteTurn() {
   );
   guidanceStatus.textContent = "Turning right";
   intentLabel.textContent = "Entering Bohlman Rd";
-  intentCopy.textContent = "Steering into the right turn from the center-console route.";
+  intentCopy.textContent = "Continuing with right of way while the yellow car waits.";
   nextMove.textContent = "Hold the turn and settle into the street.";
   syncRouteTurnDebug();
   updateRouteWorldTracking();
@@ -4331,13 +5364,11 @@ function getDriveTargetSpeed(scenario) {
   const keyboardDriving = isKeyboardDrivingEnabled();
   if (scenario.id === "route-right-turn" && (isG29DrivingEnabled() || keyboardDriving)) {
     if (state.wheelBrakeHeld || state.spaceHeld) return 0;
-    const routeCruise = Math.max(scenario.recommendedSpeed ?? 22, 18);
     if (!state.routeDriveStarted && throttle <= 0) return 0;
-    if (throttle <= 0) {
-      return state.routeDriveStarted ? THREE.MathUtils.clamp(state.speed, 0, routeCruise) : 0;
-    }
-    const desiredSpeed = THREE.MathUtils.lerp(0, routeCruise, throttle);
-    return state.routeDriveStarted ? Math.max(desiredSpeed, Math.min(state.speed, routeCruise)) : desiredSpeed;
+    if (throttle <= 0) return state.routeDriveStarted ? Math.max(0, state.speed - 4) : 0;
+    const routeThrottleLimit = state.routeTurnComplete ? 34 : state.routeTurnActive ? 27 : 32;
+    const throttleCurve = Math.pow(THREE.MathUtils.clamp(throttle, 0, 1), 0.82);
+    return THREE.MathUtils.lerp(4, routeThrottleLimit, throttleCurve);
   }
   if (keyboardDriving) {
     if (state.spaceHeld) return 0;
@@ -4404,6 +5435,9 @@ function updateRouteTurn(delta, scenario) {
   if (state.routeTurnComplete) {
     state.routeSideDistance += delta * Math.max(state.speed, 0) * routeSideDistanceScale;
     const remaining = Math.max(0, routeDestinationDistance - state.routeSideDistance);
+    if (remaining <= 4 && state.routeDestinationReachedAt === null) {
+      state.routeDestinationReachedAt = state.time;
+    }
     const passedDestination = state.routeSideDistance > routeDestinationDistance + 8;
     guidanceStatus.textContent = passedDestination ? "Free drive" : remaining > 8 ? "On Bohlman Rd" : "Destination";
     intentLabel.textContent = passedDestination ? "Continue driving" : remaining > 8 ? "Continue" : "Destination ahead";
@@ -4421,18 +5455,38 @@ function updateRouteTurn(delta, scenario) {
   }
 
   if (!state.routeTurnActive && !state.routeTurnComplete) {
-    state.routeApproachDistance += delta * Math.max(state.speed, 0) * 0.68;
+    state.routeApproachDistance += delta * Math.max(state.speed, 0) * routeApproachDistanceScale;
     state.routeTurnProgress = THREE.MathUtils.clamp(
       (Math.min(state.routeApproachDistance, routeTurnApproachDistance) / routeTurnApproachDistance) * routeTurnApproachEnd,
       0,
       routeTurnApproachEnd
     );
+    if (!state.routeAgentPrompted && state.routeApproachDistance >= routeAgentPromptDistance) {
+      showRouteRightTurnNotice();
+    }
     const turnReady = getRouteApproachReady();
-    if (!turnReady) {
+    if (state.centerDisplayThankYouAt !== null) {
+      guidanceStatus.textContent = "Thank you";
+      intentLabel.textContent = "Yellow car clearing";
+      intentCopy.textContent = "The yellow car is completing the turn.";
+      nextMove.textContent = "Wait a moment, then continue when the path is clear.";
+    } else if (state.centerDisplayGoAheadSentAt !== null) {
+      guidanceStatus.textContent = "Go ahead sent";
+      intentLabel.textContent = "Yellow car moving";
+      intentCopy.textContent = "The yellow car is turning left onto Bohlman Rd.";
+      nextMove.textContent = "Hold position until the yellow car clears, then continue your turn.";
+    } else if (state.routeAgentPrompted) {
+      guidanceStatus.textContent = "Right of way";
+      intentLabel.textContent = "Yellow car waiting";
+      intentCopy.textContent = "A yellow car is waiting to turn left onto Bohlman Rd while we prepare to turn right.";
+      nextMove.textContent = turnReady
+        ? "You have right of way. The center display can send Go ahead if you choose."
+        : "Approach the turn while the agent monitors the waiting car.";
+    } else if (!turnReady) {
       guidanceStatus.textContent = "Continue straight";
-      intentLabel.textContent = "Right turn ahead";
-      intentCopy.textContent = "Drive up to the guide, then turn onto Bohlman Rd.";
-      nextMove.textContent = "Use W/S or pedals for speed; steer right when the guide reaches the corner.";
+      intentLabel.textContent = "Agent monitoring";
+      intentCopy.textContent = "Monitoring for the yellow car near the turn.";
+      nextMove.textContent = "Drive toward the turn.";
     } else {
       const missedTurn = state.routeApproachDistance > routeTurnApproachDistance + routeTurnMissWindowDistance;
       guidanceStatus.textContent = missedTurn ? "Continue straight" : "Turn right";
@@ -4452,32 +5506,47 @@ function updateRouteTurn(delta, scenario) {
 
   if (!state.routeTurnActive || state.routeTurnComplete) return;
 
-  const turnSpeed = THREE.MathUtils.clamp(state.speed / 22, 0.42, 0.9);
-  // Steering initiates the maneuver, but centering the wheel should not strand
-  // the camera halfway around the corner. Once committed, the car completes the
-  // curve and returns to straight-ahead driving.
-  const steerCommitment = Math.max(
-    0.58,
-    THREE.MathUtils.clamp((state.routeTurnSteerIntent - routeTurnSteerHoldThreshold) / (1 - routeTurnSteerHoldThreshold), 0, 1)
+  const motion = THREE.MathUtils.clamp(state.speed / 22, 0, 1.35);
+  const steering = THREE.MathUtils.clamp(
+    Math.max(state.routeTurnSteerIntent, state.visualSteeringAxis, state.steeringImpulse * 2.5),
+    0,
+    1
   );
-  const progressRate = routeTurnProgressRate * Math.pow(steerCommitment, 1.18);
-  state.routeTurnProgress = THREE.MathUtils.clamp(state.routeTurnProgress + delta * turnSpeed * progressRate, 0, 1);
+  state.routeTurnSteerBlend = THREE.MathUtils.damp(state.routeTurnSteerBlend, steering, 5.4, delta);
+  const steerCommitment = THREE.MathUtils.clamp(
+    (state.routeTurnSteerBlend - routeTurnSteerHoldThreshold) / (1 - routeTurnSteerHoldThreshold),
+    0,
+    1
+  );
+  const isOnCurve = state.routeTurnProgress < routeTurnCurveEnd;
+  const driverProgress = isOnCurve ? Math.pow(steerCommitment, 1.12) : 1;
+  const progressRate = routeTurnProgressRate * motion * driverProgress;
+  state.routeTurnProgress = THREE.MathUtils.clamp(
+    state.routeTurnProgress + delta * progressRate,
+    0,
+    1
+  );
 
-  if (state.routeTurnProgress > 0.56) {
+  if (state.routeTurnProgress >= routeTurnCurveEnd) {
     guidanceStatus.textContent = "On Bohlman Rd";
-    intentLabel.textContent = "Turn completed";
-    intentCopy.textContent = "The 3D view has entered the same street shown on the center console.";
-    nextMove.textContent = "Continue toward the destination.";
+    intentLabel.textContent = "Turn aligned";
+    intentCopy.textContent = "The car is aligned with the street shown on the center console.";
+    nextMove.textContent = "Straighten the wheel and accelerate onto Bohlman Rd.";
   } else {
     guidanceStatus.textContent = "Turning right";
     intentLabel.textContent = "Entering Bohlman Rd";
-    intentCopy.textContent = "Steering into the right turn from the center-console route.";
-    nextMove.textContent = "Hold the turn and settle into the street.";
+    intentCopy.textContent = isOnCurve && steerCommitment <= 0.04
+      ? "The car is waiting for your steering input."
+      : "Your steering is shaping the right turn.";
+    nextMove.textContent = isOnCurve
+      ? "Keep steering right and use the gas to control your speed."
+      : "Straighten the wheel and accelerate onto Bohlman Rd.";
   }
 
   if (state.routeTurnProgress >= 1) {
     state.routeTurnActive = false;
     state.routeTurnComplete = true;
+    state.routeTurnSteerBlend = 0;
     state.routeSideDistance = 0;
   }
 }
@@ -4521,12 +5590,12 @@ function applyRouteCamera(delta) {
   const turnBank = -0.032 * Math.sin(turnEase * Math.PI);
   const desiredPitch = cameraBasePitch + THREE.MathUtils.lerp(0, 0.012, turnEase);
 
-  camera.position.x = THREE.MathUtils.damp(camera.position.x, cameraPoint.x, 8.4, delta);
+  camera.position.x = THREE.MathUtils.damp(camera.position.x, cameraPoint.x, 6.6, delta);
   camera.position.y = cameraBaseHeight;
-  camera.position.z = THREE.MathUtils.damp(camera.position.z, cameraPoint.z, 8.4, delta);
-  camera.rotation.x = THREE.MathUtils.damp(camera.rotation.x, desiredPitch, 7.4, delta);
-  camera.rotation.y = THREE.MathUtils.damp(camera.rotation.y, turnYaw, 6.8, delta);
-  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, turnBank, 6.8, delta);
+  camera.position.z = THREE.MathUtils.damp(camera.position.z, cameraPoint.z, 6.6, delta);
+  camera.rotation.x = THREE.MathUtils.damp(camera.rotation.x, desiredPitch, 5.8, delta);
+  camera.rotation.y = THREE.MathUtils.damp(camera.rotation.y, turnYaw, 5.2, delta);
+  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, turnBank, 5.2, delta);
   syncRouteTurnDebug();
 }
 
@@ -4588,68 +5657,45 @@ function runFrame() {
     const scenario = scenarioDefinitions[state.scenarioIndex];
     applyKeyboardSteeringInput(delta);
     if (!isG29DrivingEnabled()) {
-      const virtualSteerIntent = THREE.MathUtils.clamp(state.targetLateral / (laneWidth * 1.08), 0, 1);
-      state.routeTurnSteerIntent = Math.max(
-        virtualSteerIntent,
-        THREE.MathUtils.damp(state.routeTurnSteerIntent, 0, 2.9, delta)
-      );
+      if (state.routeTurnActive) {
+        state.routeTurnSteerIntent = THREE.MathUtils.clamp(state.visualSteeringAxis, 0, 1);
+      } else {
+        const virtualSteerIntent = THREE.MathUtils.clamp(state.targetLateral / (laneWidth * 1.08), 0, 1);
+        state.routeTurnSteerIntent = Math.max(
+          virtualSteerIntent,
+          THREE.MathUtils.damp(state.routeTurnSteerIntent, 0, 2.9, delta)
+        );
+      }
+    }
+    const driveTargetSpeed = getDriveTargetSpeed(scenario);
+    if (applyHeldBrakeStop(scenario, delta)) {
+      // Speed is handled by the held brake curve above.
+    } else if (scenario.id === "route-right-turn") {
+      const throttle = getActiveThrottleAmount();
+      const accelerating = driveTargetSpeed > state.speed;
+      const response = accelerating ? 0.78 : state.routeTurnActive ? 0.46 : throttle > 0 ? 0.34 : 0.22;
+      state.speed = THREE.MathUtils.damp(state.speed, driveTargetSpeed, response, delta);
+      if (state.speed < 0.08 && driveTargetSpeed === 0) state.speed = 0;
+    } else if (scenario.id === "compression" && state.speed > driveTargetSpeed) {
+      state.speed = THREE.MathUtils.damp(state.speed, driveTargetSpeed, 1.15, delta);
+    } else {
+      state.speed = THREE.MathUtils.lerp(state.speed, driveTargetSpeed, getDriveSpeedBlend());
     }
     if (scenario.id === "right-of-way" && state.decisionMade && state.decisionChoice === "stop") {
-      const holdZone = getHoldZoneOverlay();
-      const stopTargetZ = getRightOfWayStopZ();
-      const stopPointLocalZ = holdZone?.userData.stopPointLocalZ ?? 0;
-      const markerTargetZ = stopTargetZ - stopPointLocalZ;
-      const markerStartZ = state.rightOfWayStopMarkerStartZ ?? holdZone?.position.z ?? markerTargetZ;
-      state.rightOfWayStopMarkerStartZ = markerStartZ;
-
-      const stopElapsed = Math.max(0, state.time - state.stopDecisionTime);
-      const stopTravel = Math.max(0.1, markerTargetZ - markerStartZ);
-      const stopDuration = THREE.MathUtils.clamp(stopTravel / 6.1, 4.4, 6.1);
-      const rawStopProgress = THREE.MathUtils.clamp(stopElapsed / stopDuration, 0, 1);
-      const arrivalProgress = 1 - Math.pow(1 - rawStopProgress, 2.35);
-
-      if (holdZone) {
-        holdZone.position.x = THREE.MathUtils.lerp(holdZone.position.x, holdZone.userData.laneX ?? holdZone.position.x, 0.22);
-        holdZone.position.z = THREE.MathUtils.lerp(markerStartZ, markerTargetZ, arrivalProgress);
-      }
-
       const holdZoneZ = getHoldZoneStopPointZ();
-      const distanceToHold = holdZoneZ === null ? 0 : stopTargetZ - holdZoneZ;
-      const isOnStopPoint = holdZoneZ !== null && (distanceToHold <= 0.14 || rawStopProgress >= 0.995);
-
-      if (!isOnStopPoint) {
-        const brakeProgress = THREE.MathUtils.smoothstep(rawStopProgress, 0.02, 1);
-        const rollSpeed = THREE.MathUtils.lerp(state.stopStartSpeed || state.speed, 4.2, brakeProgress);
-        state.speed = THREE.MathUtils.damp(state.speed, rollSpeed, 1.28, delta);
-        guidanceStatus.textContent = "Braking";
-        intentLabel.textContent = "Slowing";
-        intentCopy.textContent = "Stopping at stop point.";
-        nextMove.textContent = "Stop point.";
-      } else if (state.speed > 0.45) {
-        state.speed = THREE.MathUtils.damp(state.speed, 0, 2.35, delta);
-        guidanceStatus.textContent = "Braking";
-        intentLabel.textContent = "Slowing";
-        intentCopy.textContent = "On the stop point.";
-        nextMove.textContent = "Stop point.";
-      } else {
-        state.speed = 0;
-        guidanceStatus.textContent = "Holding";
-        intentLabel.textContent = "Holding";
-        intentCopy.textContent = "At stop point.";
-        nextMove.textContent = "Wait.";
-      }
-      if (state.rightOfWayYieldTime === null && isOnStopPoint && state.speed <= 1.35) {
+      const stopTargetZ = getRightOfWayStopZ();
+      const distanceToHold = holdZoneZ === null ? Infinity : Math.abs(stopTargetZ - holdZoneZ);
+      const isHoldingAtStopPoint = holdZoneZ !== null && distanceToHold <= 0.85 && state.speed <= 1.35;
+      if (state.rightOfWayYieldTime === null && isHoldingAtStopPoint) {
         state.rightOfWayYieldTime = state.time;
       }
-      if (state.rightOfWayYieldTime !== null) setRightOfWayTurnCopy();
-    } else {
-      const driveTargetSpeed = getDriveTargetSpeed(scenario);
-      if (applyHeldBrakeStop(scenario, delta)) {
-        // Speed is handled by the held brake curve above.
-      } else if (scenario.id === "compression" && state.speed > driveTargetSpeed) {
-        state.speed = THREE.MathUtils.damp(state.speed, driveTargetSpeed, 1.15, delta);
-      } else {
-        state.speed = THREE.MathUtils.lerp(state.speed, driveTargetSpeed, getDriveSpeedBlend());
+      if (state.rightOfWayYieldTime !== null) {
+        setRightOfWayTurnCopy();
+      } else if (!state.spaceHeld) {
+        guidanceStatus.textContent = "Stop point";
+        intentLabel.textContent = "Hold point marked";
+        intentCopy.textContent = "The stop point is marked. You control whether to slow or keep rolling.";
+        nextMove.textContent = "Brake when you want to stop and let them turn.";
       }
     }
     updateRouteTurn(routeDelta, scenario);
@@ -4679,13 +5725,19 @@ function runFrame() {
   } else {
     syncRouteTurnDebug();
   }
-  const wheelTarget = THREE.MathUtils.clamp(state.lateral * 12 + state.steeringImpulse * 20, -34, 34);
+  const wheelTarget = THREE.MathUtils.clamp(
+    state.visualSteeringAxis * 34 + state.lateral * 5 + state.steeringImpulse * 10,
+    -38,
+    38
+  );
   state.wheelAngle = THREE.MathUtils.lerp(state.wheelAngle, wheelTarget, 0.08);
   steeringWheel.style.setProperty("--wheel-angle", `${state.wheelAngle.toFixed(2)}deg`);
   state.steeringImpulse = THREE.MathUtils.lerp(state.steeringImpulse, 0, 0.08);
 
   updateTraffic(delta);
   updateTrafficSignals();
+  updateRouteAssistanceVisualState();
+  updateSenderPerspectiveVisibility();
   updateOverlays(delta);
   restartScenarioMomentIfNeeded();
   publishCenterDisplayTelemetry();
@@ -4737,7 +5789,21 @@ function syncCanvasPixelDebug() {
 
 function restartScenarioMomentIfNeeded() {
   const scenario = scenarioDefinitions[state.scenarioIndex];
-  if (!scenario.loopDuration || state.paused) return;
+  if (state.paused) return;
+
+  if (scenario.id === "route-right-turn") {
+    const reachedDestination = state.routeDestinationReachedAt !== null;
+    const missedTurn =
+      !state.routeTurnActive &&
+      !state.routeTurnComplete &&
+      state.routeApproachDistance > routeTurnApproachDistance + routeTurnMissWindowDistance + 12;
+    if ((reachedDestination && state.time - state.routeDestinationReachedAt >= routeScenarioResetDelay) || missedTurn) {
+      activateScenario(state.scenarioIndex, { continueVoice: true });
+    }
+    return;
+  }
+
+  if (!scenario.loopDuration) return;
 
   if (scenario.id === "right-of-way" && state.decisionMade && state.decisionChoice === "stop") {
     if (state.speed <= 0.45 && guidanceStatus.textContent === "Holding") {
@@ -4902,17 +5968,12 @@ function updateIncomingRightTurnRequestVehicle(vehicle, data, delta) {
   const sideStartX = data.turnEndX ?? routeTurnFinalX - 5.2;
   const sideLeadDistance = data.sideLeadDistance ?? 34;
   const approachT = THREE.MathUtils.smoothstep(state.routeApproachDistance, 0, routeTurnReadyDistance * 0.95);
-  const approachTurnT = THREE.MathUtils.smoothstep(
-    state.routeApproachDistance,
-    routeTurnReadyDistance * 0.72,
-    routeTurnApproachDistance + 13
-  );
-  const activeRouteTurnT = state.routeTurnComplete
-    ? 1
-    : state.routeTurnActive
-      ? THREE.MathUtils.smoothstep(state.routeTurnProgress, routeTurnApproachEnd, routeTurnCurveEnd)
-      : 0;
-  const turnT = Math.max(approachTurnT, activeRouteTurnT);
+  const goAheadElapsed = state.centerDisplayGoAheadSentAt === null
+    ? 0
+    : Math.max(0, state.time - state.centerDisplayGoAheadSentAt);
+  const turnT = state.centerDisplayGoAheadSentAt === null
+    ? 0
+    : THREE.MathUtils.smoothstep(goAheadElapsed, 0.18, 3.15);
 
   if (turnT < 0.02) {
     vehicle.position.x = THREE.MathUtils.damp(vehicle.position.x, oncomingX, 8.2, delta);
@@ -4933,7 +5994,10 @@ function updateIncomingRightTurnRequestVehicle(vehicle, data, delta) {
     vehicle.rotation.y = THREE.MathUtils.damp(vehicle.rotation.y, Math.atan2(-tangent.x, -tangent.z), 8.4, delta);
     data.currentSideRoad = turnT > 0.72;
   } else {
-    const desiredTravel = state.routeTurnComplete ? state.routeSideDistance + sideLeadDistance : sideLeadDistance;
+    const desiredTravel = Math.max(
+      sideLeadDistance + Math.max(0, goAheadElapsed - 3.1) * 9.5,
+      state.routeTurnComplete ? state.routeSideDistance + sideLeadDistance : sideLeadDistance
+    );
     data.sideTravel = Math.max(data.sideTravel ?? sideLeadDistance, desiredTravel);
     data.sideTravel = Math.min(
       routeSideDistanceLimit + sideLeadDistance,
@@ -4945,7 +6009,7 @@ function updateIncomingRightTurnRequestVehicle(vehicle, data, delta) {
     data.currentSideRoad = true;
   }
 
-  data.requestActive = state.routeApproachDistance > 18 && state.routeApproachDistance < 76 && !state.routeTurnComplete;
+  data.requestActive = state.centerDisplayGoAheadSentAt === null && state.routeApproachDistance > 18 && state.routeApproachDistance < 76 && !state.routeTurnComplete;
   data.brake = data.requestActive && state.speed > 8 && !data.currentSideRoad;
 }
 
@@ -5176,19 +6240,19 @@ function getYieldingOverlayEmphasis(overlay) {
 
 function updateOverlays(delta) {
   const scenario = scenarioDefinitions[state.scenarioIndex];
-  const pendingRightOfWay = scenario.id === "right-of-way" && !state.decisionMade;
-  const pendingYielding = scenario.id === "yielding" && !state.decisionMade;
+  const rightOfWayAssistanceVisible = scenario.id !== "right-of-way" || (state.decisionMade && state.decisionChoice === "stop");
+  const yieldingAssistanceVisible = scenario.id !== "yielding" || state.routeAssistanceChoice === "hold";
 
   overlayGroup.children.forEach((overlay) => {
     const isGuidance = overlay.userData.overlayType === "guidance";
     const isLens = overlay.userData.overlayType === "lens";
     const choice = overlay.userData.choice;
-    const choiceVisible =
-      !choice ||
-      choice === state.decisionChoice ||
-      (pendingRightOfWay && choice === "stop") ||
-      (pendingYielding && choice === "yield");
-    overlay.visible = choiceVisible && ((isGuidance && state.guidanceOn) || (isLens && state.lensOn));
+    const choiceVisible = !choice || choice === state.decisionChoice;
+    overlay.visible =
+      yieldingAssistanceVisible &&
+      rightOfWayAssistanceVisible &&
+      choiceVisible &&
+      ((isGuidance && state.guidanceOn) || (isLens && state.lensOn));
     const manualRightOfWayStop =
       overlay.userData.rightOfWayCue === "hold-zone" &&
       scenario.id === "right-of-way" &&

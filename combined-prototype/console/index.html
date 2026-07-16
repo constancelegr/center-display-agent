@@ -39,7 +39,7 @@
   .vehicles{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .35s}
   .map-ego-static{transition:opacity .18s ease}
   #stage.has-live-simulator-state .map-ego-static{opacity:0}
-  .car{position:absolute;width:30px;height:42px;border-radius:9px;box-shadow:0 2px 5px rgba(0,0,0,.28);transform:translate(-50%,-50%) rotate(var(--rot,0deg));transition:left .18s linear,top .18s linear,transform .18s linear}
+  .car{position:absolute;left:0;top:0;width:30px;height:42px;border-radius:9px;box-shadow:0 2px 5px rgba(0,0,0,.28);transform:translate3d(var(--x,0px),var(--y,0px),0) translate(-50%,-50%) rotate(var(--rot,0deg));transition:transform .07s linear,background .12s linear;will-change:transform}
   .car i{position:absolute;left:5px;border-radius:4px;background:rgba(255,255,255,.85)}
   .car i.w1{top:6px;width:20px;height:12px}
   .car i.w2{top:27px;width:20px;height:9px;background:rgba(255,255,255,.5)}
@@ -111,6 +111,7 @@
   .opt .rad{margin-left:auto;width:28px;height:28px;border-radius:50%;border:2px solid #C7C7CC;flex:0 0 auto;display:grid;place-items:center}
   .opt .rad svg, .vrow .rad svg{opacity:0}
   .lab{font-size:13px;font-weight:600;letter-spacing:.6px;color:#9A9AA0;margin:14px 2px 0}
+  .recipientCopyDetected{display:none}
   .vrow{margin-top:10px;border-radius:16px;background:var(--row);padding:12px 16px 12px 14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.15s}
   .vrow .vi{width:40px;height:40px;border-radius:11px;background:#fff;display:grid;place-items:center;flex:0 0 auto;position:relative}
   .vrow .vi .cb{width:16px;height:24px;border-radius:5px}
@@ -195,20 +196,18 @@
   #sc-thanks:checked~#stage,#sc-sent-thanks:checked~#stage{--accent:#FF375F;--mn:"“Thank you”"}
   #sc-sorry:checked~#stage,#sc-sent-sorry:checked~#stage{--accent:#FF9F0A;--mn:"“Sorry”"}
   #sc-emergency:checked~#stage,#sc-sent-emergency:checked~#stage{--accent:#FF3B30;--mn:"“Emergency”"}
-  #sc-localnorm:checked~#stage,#sc-sent-localnorm:checked~#stage{--accent:#8B5CF6;--mn:"“Local norm”"}
   #sc-goahead:checked~#stage,#sc-sent-goahead:checked~#stage{--accent:#34C759;--mn:"“Go ahead”"}
   /* recipient panel */
-  :is(#sc-thanks,#sc-sorry,#sc-emergency,#sc-localnorm,#sc-goahead):checked~#stage #ovRecipient{opacity:1;visibility:visible;transform:translateX(0)}
-  :is(#sc-thanks,#sc-sorry,#sc-emergency,#sc-localnorm,#sc-goahead):checked~#stage #vehicles{opacity:1}
-  #sc-thanks:checked~#stage .bi-thanks,#sc-sorry:checked~#stage .bi-sorry,#sc-emergency:checked~#stage .bi-emergency,#sc-localnorm:checked~#stage .bi-localnorm,#sc-goahead:checked~#stage .bi-goahead{display:block}
-  #sc-thanks:checked~#stage .snd-thanks,#sc-sorry:checked~#stage .snd-sorry,#sc-emergency:checked~#stage .snd-emergency,#sc-localnorm:checked~#stage .snd-localnorm,#sc-goahead:checked~#stage .snd-goahead{display:flex}
-  #sc-thanks:checked~#stage label[data-msg=thanks],#sc-sorry:checked~#stage label[data-msg=sorry],#sc-emergency:checked~#stage label[data-msg=emergency],#sc-localnorm:checked~#stage label[data-msg=localnorm],#sc-goahead:checked~#stage label[data-msg=goahead]{outline:2.5px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,#fff)}
+  :is(#sc-thanks,#sc-sorry,#sc-emergency,#sc-goahead):checked~#stage #ovRecipient{opacity:1;visibility:visible;transform:translateX(0)}
+  :is(#sc-thanks,#sc-sorry,#sc-emergency,#sc-goahead):checked~#stage #vehicles{opacity:1}
+  #sc-thanks:checked~#stage .bi-thanks,#sc-sorry:checked~#stage .bi-sorry,#sc-emergency:checked~#stage .bi-emergency,#sc-goahead:checked~#stage .bi-goahead{display:block}
+  #sc-thanks:checked~#stage .snd-thanks,#sc-sorry:checked~#stage .snd-sorry,#sc-emergency:checked~#stage .snd-emergency,#sc-goahead:checked~#stage .snd-goahead{display:flex}
+  #sc-thanks:checked~#stage label[data-msg=thanks],#sc-sorry:checked~#stage label[data-msg=sorry],#sc-emergency:checked~#stage label[data-msg=emergency],#sc-goahead:checked~#stage label[data-msg=goahead]{outline:2.5px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,#fff)}
   /* sent */
-  :is(#sc-sent-thanks,#sc-sent-sorry,#sc-sent-emergency,#sc-sent-localnorm,#sc-sent-goahead):checked~#stage #ovSent{opacity:1;visibility:visible;transform:translateY(0)}
+  :is(#sc-sent-thanks,#sc-sent-sorry,#sc-sent-emergency,#sc-sent-goahead):checked~#stage #ovSent{opacity:1;visibility:visible;transform:translateY(0)}
   /* request / notice / coord */
   #sc-request:checked~#stage #ovRequest{opacity:1;visibility:visible;transform:translateY(0)}
   #sc-request:checked~#stage #vehicles{opacity:1}
-  #sc-notice:checked~#stage #ovNotice{opacity:1;visibility:visible;transform:translateY(0)}
   #sc-coord:checked~#stage #ovCoord{animation:coordPop 6s ease forwards}
   #sc-coord:checked~#stage #coordViz,#sc-coord:checked~#stage #arc{animation:vizPop 6s ease forwards}
   @keyframes coordPop{0%{opacity:0;visibility:visible;transform:translateY(36px)}5%{opacity:1;transform:translateY(0)}86%{opacity:1;transform:translateY(0)}100%{opacity:0;visibility:hidden;transform:translateY(18px)}}
@@ -216,15 +215,10 @@
   /* voice / type */
   #sc-voice:checked~#stage #ovVoice{opacity:1;visibility:visible;transform:translate(-50%,-50%) scale(1)}
   #sc-voice:checked~#stage #scrimVoice{opacity:1;visibility:visible}
-  #sc-type:checked~#stage #ovType,#sc-norm-type:checked~#stage #ovNormType{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
-  :is(#sc-type,#sc-norm-type):checked~#stage #scrimType{opacity:1;visibility:visible}
-  :is(#sc-type,#sc-norm-type):checked~#stage #keyboard{opacity:1;visibility:visible;transform:translateY(0)}
-  :is(#sc-type,#sc-norm-type):checked~#stage :is(.nav,.talk,.chip,.back,.qmsgs){opacity:0;visibility:hidden}
-  /* local-norm: describe the norm by voice before sending */
-  #sc-norm:checked~#stage #ovNorm{opacity:1;visibility:visible;transform:translate(-50%,-50%) scale(1)}
-  #sc-norm:checked~#stage #scrimVoice{opacity:1;visibility:visible}
-  #sc-norm:checked~#stage,#sc-norm-type:checked~#stage{--accent:#8B5CF6;--mn:"“Local norm”"}
-  :is(#sc-norm,#sc-norm-type,#sc-localnorm,#sc-sent-localnorm):checked~#stage label[data-msg=localnorm]{outline:2.5px solid #8B5CF6;background:color-mix(in srgb,#8B5CF6 12%,#fff)}
+  #sc-type:checked~#stage #ovType{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+  #sc-type:checked~#stage #scrimType{opacity:1;visibility:visible}
+  #sc-type:checked~#stage #keyboard{opacity:1;visibility:visible;transform:translateY(0)}
+  #sc-type:checked~#stage :is(.nav,.talk,.chip,.back,.qmsgs){opacity:0;visibility:hidden}
   /* demo chips: only on the idle home screen */
   #sc-home:checked~#stage #demo{opacity:1;visibility:visible;pointer-events:auto}
   /* recipient target selection (broadcast vs one vehicle) */
@@ -235,6 +229,15 @@
   #rt-ahead:checked~#v-ahead,#rt-right:checked~#v-right,#rt-behind:checked~#v-behind{background:rgba(10,132,255,.08)}
   #rt-ahead:checked~#v-ahead .rad,#rt-right:checked~#v-right .rad,#rt-behind:checked~#v-behind .rad{border-color:var(--blue);background:var(--blue)}
   #rt-ahead:checked~#v-ahead .rad svg,#rt-right:checked~#v-right .rad svg,#rt-behind:checked~#v-behind .rad svg{opacity:1}
+  #sc-goahead:checked~#stage .recipientCopyDefault{display:none}
+  #sc-goahead:checked~#stage .recipientCopyDetected{display:inline}
+  #sc-goahead:checked~#stage #opt-all,
+  #sc-goahead:checked~#stage #v-ahead,
+  #sc-goahead:checked~#stage #v-right,
+  #sc-goahead:checked~#stage #ovRecipient .lab{display:none}
+  #sc-goahead:checked~#stage #v-behind{background:rgba(52,199,89,.1)}
+  #sc-goahead:checked~#stage #v-behind .rad{border-color:var(--green);background:var(--green)}
+  #sc-goahead:checked~#stage #v-behind .rad svg{opacity:1}
 </style>
 </head>
 <body>
@@ -244,17 +247,12 @@
   <input class="sr" type="radio" name="screen" id="sc-thanks">
   <input class="sr" type="radio" name="screen" id="sc-sorry">
   <input class="sr" type="radio" name="screen" id="sc-emergency">
-  <input class="sr" type="radio" name="screen" id="sc-localnorm">
   <input class="sr" type="radio" name="screen" id="sc-goahead">
-  <input class="sr" type="radio" name="screen" id="sc-norm">
-  <input class="sr" type="radio" name="screen" id="sc-norm-type">
   <input class="sr" type="radio" name="screen" id="sc-sent-thanks">
   <input class="sr" type="radio" name="screen" id="sc-sent-sorry">
   <input class="sr" type="radio" name="screen" id="sc-sent-emergency">
-  <input class="sr" type="radio" name="screen" id="sc-sent-localnorm">
   <input class="sr" type="radio" name="screen" id="sc-sent-goahead">
   <input class="sr" type="radio" name="screen" id="sc-request">
-  <input class="sr" type="radio" name="screen" id="sc-notice">
   <input class="sr" type="radio" name="screen" id="sc-coord">
   <input class="sr" type="radio" name="screen" id="sc-voice">
   <input class="sr" type="radio" name="screen" id="sc-type">
@@ -269,29 +267,29 @@
       <rect x="-60" y="560" width="380" height="320" rx="42" fill="#C9E3B5"/>
       <line x1="-140" y1="270" x2="1360" y2="70" stroke="#E6CB7C" stroke-width="32" stroke-linecap="round"/>
       <line x1="-140" y1="270" x2="1360" y2="70" stroke="#F4DD96" stroke-width="24" stroke-linecap="round"/>
-      <g stroke="#D8D6CE" stroke-width="26" stroke-linecap="round">
-        <line x1="-20" y1="250" x2="1230" y2="250"/><line x1="-20" y1="470" x2="1230" y2="470"/>
-        <line x1="250" y1="-20" x2="250" y2="900"/><line x1="760" y1="-20" x2="760" y2="900"/>
+      <g stroke="#D8D6CE" stroke-width="28" stroke-linecap="round">
+        <line x1="-20" y1="150" x2="1230" y2="150"/><line x1="-20" y1="530" x2="1230" y2="530"/>
+        <line x1="235" y1="-20" x2="235" y2="900"/><line x1="890" y1="-20" x2="890" y2="900"/>
       </g>
-      <g stroke="#ffffff" stroke-width="16" stroke-linecap="round">
-        <line x1="-20" y1="250" x2="1230" y2="250"/><line x1="-20" y1="470" x2="1230" y2="470"/>
-        <line x1="250" y1="-20" x2="250" y2="900"/><line x1="760" y1="-20" x2="760" y2="900"/>
+      <g stroke="#ffffff" stroke-width="18" stroke-linecap="round">
+        <line x1="-20" y1="150" x2="1230" y2="150"/><line x1="-20" y1="530" x2="1230" y2="530"/>
+        <line x1="235" y1="-20" x2="235" y2="900"/><line x1="890" y1="-20" x2="890" y2="900"/>
       </g>
-      <path d="M463 820 L463 118" fill="none" stroke="#D8D6CE" stroke-width="96" stroke-linecap="round"/>
-      <path d="M463 312 L1035 312" fill="none" stroke="#D8D6CE" stroke-width="96" stroke-linecap="round"/>
-      <path d="M463 820 L463 118" fill="none" stroke="#FFFFFF" stroke-width="72" stroke-linecap="round"/>
-      <path d="M463 312 L1035 312" fill="none" stroke="#FFFFFF" stroke-width="72" stroke-linecap="round"/>
-      <path d="M463 742 L463 132" fill="none" stroke="rgba(47,111,239,.22)" stroke-width="18" stroke-linecap="round"/>
-      <path d="M463 742 L463 386 Q463 312 537 312 L1048 312" fill="none" stroke="#1B5BD0" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M463 742 L463 386 Q463 312 537 312 L1048 312" fill="none" stroke="#2F6FEF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M463 820 L463 118" fill="none" stroke="#D8D6CE" stroke-width="58" stroke-linecap="round"/>
+      <path d="M463 312 L1035 312" fill="none" stroke="#D8D6CE" stroke-width="58" stroke-linecap="round"/>
+      <path d="M463 820 L463 118" fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round"/>
+      <path d="M463 312 L1035 312" fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round"/>
+      <path d="M463 742 L463 386 Q463 312 537 312 L824 312" fill="none" stroke="#1B5BD0" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M463 742 L463 386 Q463 312 537 312 L824 312" fill="none" stroke="#2F6FEF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="610" y="286" fill="#6B6B70" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="18" font-weight="600">Bohlman Rd</text>
       <g id="mapSignal" transform="translate(374 176)">
         <rect x="0" y="0" width="30" height="82" rx="14" fill="#1C1C1E"/>
         <circle id="mapSigRed" cx="15" cy="17" r="8" fill="#FF3B30" opacity=".35"/>
         <circle id="mapSigYellow" cx="15" cy="41" r="8" fill="#FFCC00" opacity=".35"/>
         <circle id="mapSigGreen" cx="15" cy="65" r="8" fill="#34C759" opacity=".35"/>
       </g>
-      <circle cx="1048" cy="312" r="20" fill="#FF3B30" stroke="#fff" stroke-width="4"/>
-      <circle cx="1048" cy="312" r="6" fill="#fff"/>
+      <circle cx="824" cy="312" r="18" fill="#FF3B30" stroke="#fff" stroke-width="4"/>
+      <circle cx="824" cy="312" r="5" fill="#fff"/>
       <g class="map-ego-static">
         <circle cx="463" cy="742" r="48" fill="rgba(47,111,239,.18)"/>
         <circle cx="463" cy="742" r="26" fill="#fff"/>
@@ -317,9 +315,8 @@
     <div class="qmsgs">
       <label class="qbtn qmsg" data-msg="thanks" for="sc-thanks"><svg width="38" height="38" viewBox="0 0 38 38"><path d="M19 33C5 24 1 15 7 9c4-4 10-2 12 2 2-4 8-6 12-2 6 6 2 15-12 24Z" fill="#FF375F"/></svg><div class="lbl">Thanks</div></label>
       <label class="qbtn qmsg" data-msg="sorry" for="sc-sorry"><svg width="38" height="38" viewBox="0 0 38 38"><rect x="3" y="5" width="32" height="23" rx="8" fill="#FF9F0A"/><path d="M11 27l0 7 8-7Z" fill="#FF9F0A"/><circle cx="11" cy="16" r="2.2" fill="#fff"/><circle cx="19" cy="16" r="2.2" fill="#fff"/><circle cx="27" cy="16" r="2.2" fill="#fff"/></svg><div class="lbl">Sorry</div></label>
-      <label class="qbtn qmsg" data-msg="emergency" for="sc-emergency"><svg width="38" height="38" viewBox="0 0 38 38"><path d="M19 4 36 34H2Z" fill="#FF3B30" stroke="#FF3B30" stroke-width="3" stroke-linejoin="round"/><rect x="17" y="15" width="4" height="11" rx="2" fill="#fff"/><circle cx="19" cy="29" r="2.2" fill="#fff"/></svg><div class="lbl">Emergency</div></label>
-      <label class="qbtn qmsg" data-msg="localnorm" for="sc-norm"><svg width="38" height="38" viewBox="0 0 38 38"><rect x="9" y="4" width="4" height="30" rx="2" fill="#8B5CF6"/><path d="M13 5l18 4-5 5 5 5H13Z" fill="#8B5CF6"/></svg><div class="lbl">Local norm</div></label>
       <label class="qbtn qmsg" data-msg="goahead" for="sc-goahead"><svg width="38" height="38" viewBox="0 0 38 38" fill="none" stroke="#34C759" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 9l10 10-10 10"/><path d="M20 9l10 10-10 10"/></svg><div class="lbl">Go ahead</div></label>
+      <label class="qbtn qmsg" data-msg="emergency" for="sc-emergency"><svg width="38" height="38" viewBox="0 0 38 38"><path d="M19 4 36 34H2Z" fill="#FF3B30" stroke="#FF3B30" stroke-width="3" stroke-linejoin="round"/><rect x="17" y="15" width="4" height="11" rx="2" fill="#fff"/><circle cx="19" cy="29" r="2.2" fill="#fff"/></svg><div class="lbl">Emergency</div></label>
     </div>
 
     <!-- TOP CLUSTER -->
@@ -329,7 +326,7 @@
     </div>
     <label class="talk card" for="sc-voice">
       <div class="mic"><svg width="30" height="30" viewBox="0 0 38 38" fill="none"><rect x="14" y="8" width="10" height="18" rx="5" fill="#fff"/><path d="M9 22q0 9 10 9 10 0 10-9" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><rect x="17.5" y="30" width="3" height="5" fill="#fff"/></svg></div>
-      <div><b>Talk to agent</b><span>Add a note or request</span></div>
+      <div><b>Say “Agent”</b><span>Ask a question or make a request</span></div>
     </label>
     <div class="chip" id="syncStatus" data-status="connecting"><span class="dot"></span><span id="syncStatusText">Connecting to simulator</span></div>
 
@@ -348,10 +345,9 @@
           <span class="bi bi-thanks"><svg width="30" height="30" viewBox="0 0 38 38"><path d="M19 33C5 24 1 15 7 9c4-4 10-2 12 2 2-4 8-6 12-2 6 6 2 15-12 24Z" fill="#FF375F"/></svg></span>
           <span class="bi bi-sorry"><svg width="30" height="30" viewBox="0 0 38 38"><rect x="3" y="5" width="32" height="23" rx="8" fill="#FF9F0A"/><path d="M11 27l0 7 8-7Z" fill="#FF9F0A"/><circle cx="11" cy="16" r="2.2" fill="#fff"/><circle cx="19" cy="16" r="2.2" fill="#fff"/><circle cx="27" cy="16" r="2.2" fill="#fff"/></svg></span>
           <span class="bi bi-emergency"><svg width="30" height="30" viewBox="0 0 38 38"><path d="M19 4 36 34H2Z" fill="#FF3B30" stroke="#FF3B30" stroke-width="3" stroke-linejoin="round"/><rect x="17" y="15" width="4" height="11" rx="2" fill="#fff"/><circle cx="19" cy="29" r="2.2" fill="#fff"/></svg></span>
-          <span class="bi bi-localnorm"><svg width="30" height="30" viewBox="0 0 38 38"><rect x="9" y="4" width="4" height="30" rx="2" fill="#8B5CF6"/><path d="M13 5l18 4-5 5 5 5H13Z" fill="#8B5CF6"/></svg></span>
           <span class="bi bi-goahead"><svg width="30" height="30" viewBox="0 0 38 38" fill="none" stroke="#34C759" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 9l10 10-10 10"/><path d="M20 9l10 10-10 10"/></svg></span>
         </div>
-        <div class="t"><b>Send <span class="mn"></span></b><span>Choose who receives it</span></div>
+        <div class="t"><b>Send <span class="mn"></span></b><span class="recipientCopyDefault">Choose who receives it</span><span class="recipientCopyDetected">Detected yellow car</span></div>
         <label class="x" for="sc-home"><svg width="18" height="18" viewBox="0 0 28 28" fill="none" stroke="#8A8A8E" stroke-width="2.6" stroke-linecap="round"><path d="M8 8l12 12M20 8 8 20"/></svg></label>
       </div>
       <label class="opt" id="opt-all" for="rt-all">
@@ -371,46 +367,32 @@
         <div class="rad"><svg width="16" height="16" viewBox="0 0 28 28" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14l4 4 10-11"/></svg></div>
       </label>
       <label class="vrow" id="v-behind" for="rt-behind">
-        <div class="vi"><div class="cb" style="background:#FF9F0A"></div><div class="cw"></div></div>
-        <div class="t"><b>Incoming right-turn car</b><span>Opposing lane · 30 ft</span></div>
+        <div class="vi"><div class="cb" style="background:#FFCC00"></div><div class="cw"></div></div>
+        <div class="t"><b>Yellow car</b><span>Detected by the system</span></div>
         <div class="rad"><svg width="16" height="16" viewBox="0 0 28 28" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14l4 4 10-11"/></svg></div>
       </label>
-      <label class="send snd-thanks" for="sc-sent-thanks">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
-      <label class="send snd-sorry" for="sc-sent-sorry">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
-      <label class="send snd-emergency" for="sc-sent-emergency">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
-      <label class="send snd-localnorm" for="sc-sent-localnorm">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
-      <label class="send snd-goahead" for="sc-sent-goahead">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
+      <label class="send snd-thanks" data-send-message="thanks" for="sc-sent-thanks">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
+      <label class="send snd-sorry" data-send-message="sorry" for="sc-sent-sorry">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
+      <label class="send snd-emergency" data-send-message="emergency" for="sc-sent-emergency">Send to all nearby <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
+      <label class="send snd-goahead" data-send-message="goahead" for="sc-sent-goahead">Send to yellow car <svg width="20" height="18" viewBox="0 0 22 20" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h15M12 4l6 6-6 6"/></svg></label>
     </div></div>
 
     <!-- SENT CARD -->
     <label class="ov" id="ovSent" for="sc-home"><div class="sent">
       <div class="ck"><svg width="30" height="30" viewBox="0 0 38 38" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19l8 8 14-16"/></svg></div>
-      <div><b><span class="mn"></span> sent</b><span>Broadcast to 4 nearby vehicles · just now</span></div>
+      <div><b id="sentTitle"><span class="mn"></span> sent</b><span id="sentDetail">Broadcast to 4 nearby vehicles · just now</span></div>
     </div></label>
 
     <!-- INCOMING REQUEST -->
     <div class="ov mbottom" id="ovRequest"><div class="modal">
       <div class="mHead">
         <div class="av"><div style="width:22px;height:32px;border-radius:7px;background:#FF9F0A;position:relative;transform:rotate(-90deg)"><div style="position:absolute;left:3.5px;top:4px;width:15px;height:9px;border-radius:3px;background:#fff"></div></div></div>
-        <div><b>Incoming right-turn request</b><span>Yellow car is coming toward you to turn onto Bohlman Rd</span></div>
+        <div><b>Yellow car detected</b><span>A yellow car across the intersection is waiting to turn left onto Bohlman Rd.</span></div>
       </div>
-      <div class="agentStrip"><svg width="20" height="20" viewBox="0 0 38 38"><path d="M19 4l3 12 12 3-12 3-3 12-3-12-12-3 12-3Z" fill="#5E5CE6"/></svg>Agent alert: keep your gap and let the incoming car clear the turn first</div>
+      <div class="agentStrip"><svg width="20" height="20" viewBox="0 0 38 38"><path d="M19 4l3 12 12 3-12 3-3 12-3-12-12-3 12-3Z" fill="#5E5CE6"/></svg>Say “Agent” for questions.</div>
       <div class="mBtns">
-        <label class="btn green" for="sc-coord"><svg width="24" height="24" viewBox="0 0 38 38" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19l8 8 14-16"/></svg>Hold gap</label>
+        <label class="btn green" data-auto-send-message="goahead" for="sc-sent-goahead"><svg width="24" height="24" viewBox="0 0 38 38" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19l8 8 14-16"/></svg>Send Go ahead</label>
         <label class="btn danger" for="sc-home">Decline</label>
-        <label class="btn grey" for="sc-home">Ignore</label>
-      </div>
-    </div></div>
-
-    <!-- NOTICE -->
-    <div class="ov mbottom" id="ovNotice"><div class="modal">
-      <div class="mHead">
-        <div class="av" style="width:56px;height:56px;border-radius:16px;background:rgba(139,92,246,.15)"><svg width="30" height="30" viewBox="0 0 38 38"><rect x="9" y="4" width="4" height="30" rx="2" fill="#8B5CF6"/><path d="M13 5l18 4-5 5 5 5H13Z" fill="#8B5CF6"/></svg></div>
-        <div><b>Heads up — local merge custom ahead</b><span>Shared by 3 vehicles · 500 ft ahead</span></div>
-      </div>
-      <div class="mBody">Drivers ahead are zipper-merging because the right lane closes in 500 ft. Your agent suggests matching the pattern — take turns at the merge point.</div>
-      <div class="mBtns">
-        <label class="btn green" for="sc-home"><svg width="24" height="24" viewBox="0 0 38 38" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19l8 8 14-16"/></svg>Accept</label>
         <label class="btn grey" for="sc-home">Ignore</label>
       </div>
     </div></div>
@@ -432,12 +414,11 @@
     <!-- VOICE -->
     <div class="ov center" id="ovVoice"><div class="vcard">
       <div class="vorb live"><div class="h2"></div><div class="h1"></div><div class="o"><svg width="26" height="26" viewBox="0 0 38 38" fill="none"><rect x="14" y="8" width="10" height="18" rx="5" fill="#fff"/><path d="M9 22q0 9 10 9 10 0 10-9" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><rect x="17.5" y="30" width="3" height="5" fill="#fff"/></svg></div></div>
-      <div class="vstate">Listening…</div>
-      <div class="vtext">“Hold a safe gap for the incoming car, then guide my right turn.”</div>
+      <div class="vstate">Agent listening…</div>
+      <div class="vtext">“What would you like help with?”</div>
       <div class="wave" id="wave"><i style="height:14px;animation-delay:0s"></i><i style="height:26px;animation-delay:.07s"></i><i style="height:40px;animation-delay:.14s"></i><i style="height:22px;animation-delay:.21s"></i><i style="height:52px;animation-delay:.28s"></i><i style="height:34px;animation-delay:.35s"></i><i style="height:18px;animation-delay:.42s"></i><i style="height:44px;animation-delay:.49s"></i><i style="height:60px;animation-delay:.56s"></i><i style="height:30px;animation-delay:.63s"></i><i style="height:20px;animation-delay:.70s"></i><i style="height:48px;animation-delay:.77s"></i><i style="height:38px;animation-delay:.84s"></i><i style="height:24px;animation-delay:.91s"></i><i style="height:56px;animation-delay:.98s"></i><i style="height:28px;animation-delay:1.05s"></i><i style="height:16px;animation-delay:1.12s"></i><i style="height:42px;animation-delay:1.19s"></i><i style="height:34px;animation-delay:1.26s"></i><i style="height:22px;animation-delay:1.33s"></i><i style="height:30px;animation-delay:1.40s"></i><i style="height:18px;animation-delay:1.47s"></i></div>
       <div class="vbtns">
         <label class="btn indigo" for="sc-coord">Send to agent</label>
-        <label class="btn indigo" for="sc-norm" style="background:#8B5CF6">Local norm</label>
         <label class="btn grey" for="sc-type"><svg width="26" height="20" viewBox="0 0 30 22" fill="none" stroke="#1C1C1E" stroke-width="2"><rect x="1" y="3" width="28" height="16" rx="4"/><circle cx="8" cy="9" r="1.2" fill="#1C1C1E"/><circle cx="15" cy="9" r="1.2" fill="#1C1C1E"/><circle cx="22" cy="9" r="1.2" fill="#1C1C1E"/><path d="M9 14h12" stroke-linecap="round"/></svg>Type instead</label>
         <label class="btn danger" for="sc-home">Cancel</label>
       </div>
@@ -447,35 +428,10 @@
     <div class="ov typev" id="ovType">
       <div class="vorb"><div class="h2"></div><div class="h1"></div><div class="o"><svg width="26" height="26" viewBox="0 0 38 38" fill="none"><rect x="14" y="8" width="10" height="18" rx="5" fill="#fff"/><path d="M9 22q0 9 10 9 10 0 10-9" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><rect x="17.5" y="30" width="3" height="5" fill="#fff"/></svg></div></div>
       <div class="vstate">Type your request</div>
-      <div class="vtext" id="typeText" data-ex="“Hold a safe gap for the incoming car, then guide my right turn.”">“Hold a safe gap for the incoming car, then guide my right turn.”</div>
+      <div class="vtext" id="typeText" data-ex="“What would you like help with?”">“What would you like help with?”</div>
       <div class="vbtns">
         <label class="btn indigo" for="sc-coord">Send to agent</label>
         <label class="btn grey" for="sc-voice"><svg width="20" height="20" viewBox="0 0 38 38" fill="none"><rect x="14" y="8" width="10" height="18" rx="5" fill="#1C1C1E"/><path d="M9 22q0 9 10 9 10 0 10-9" stroke="#1C1C1E" stroke-width="2.5" stroke-linecap="round"/><rect x="17.5" y="30" width="3" height="5" fill="#1C1C1E"/></svg>Talk instead</label>
-        <label class="btn danger" for="sc-home">Cancel</label>
-      </div>
-    </div>
-
-    <!-- LOCAL NORM — describe by voice -->
-    <div class="ov center" id="ovNorm"><div class="vcard">
-      <div class="vorb live"><div class="h2"></div><div class="h1"></div><div class="o"><svg width="26" height="26" viewBox="0 0 38 38" fill="none"><rect x="14" y="8" width="10" height="18" rx="5" fill="#fff"/><path d="M9 22q0 9 10 9 10 0 10-9" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><rect x="17.5" y="30" width="3" height="5" fill="#fff"/></svg></div></div>
-      <div class="vstate" style="color:#8B5CF6">Describe the local norm</div>
-      <div class="vtext">“Drivers here zipper-merge at the cones — take turns at the merge point.”</div>
-      <div class="wave"><i style="height:14px;animation-delay:0s"></i><i style="height:26px;animation-delay:.07s"></i><i style="height:40px;animation-delay:.14s"></i><i style="height:22px;animation-delay:.21s"></i><i style="height:52px;animation-delay:.28s"></i><i style="height:34px;animation-delay:.35s"></i><i style="height:18px;animation-delay:.42s"></i><i style="height:44px;animation-delay:.49s"></i><i style="height:60px;animation-delay:.56s"></i><i style="height:30px;animation-delay:.63s"></i><i style="height:20px;animation-delay:.70s"></i><i style="height:48px;animation-delay:.77s"></i><i style="height:38px;animation-delay:.84s"></i><i style="height:24px;animation-delay:.91s"></i><i style="height:56px;animation-delay:.98s"></i><i style="height:28px;animation-delay:1.05s"></i><i style="height:16px;animation-delay:1.12s"></i><i style="height:42px;animation-delay:1.19s"></i><i style="height:34px;animation-delay:1.26s"></i><i style="height:22px;animation-delay:1.33s"></i><i style="height:30px;animation-delay:1.40s"></i><i style="height:18px;animation-delay:1.47s"></i></div>
-      <div class="vbtns">
-        <label class="btn indigo" for="sc-localnorm" style="background:#8B5CF6">Continue</label>
-        <label class="btn grey" for="sc-norm-type"><svg width="26" height="20" viewBox="0 0 30 22" fill="none" stroke="#1C1C1E" stroke-width="2"><rect x="1" y="3" width="28" height="16" rx="4"/><circle cx="8" cy="9" r="1.2" fill="#1C1C1E"/><circle cx="15" cy="9" r="1.2" fill="#1C1C1E"/><circle cx="22" cy="9" r="1.2" fill="#1C1C1E"/><path d="M9 14h12" stroke-linecap="round"/></svg>Type instead</label>
-        <label class="btn danger" for="sc-home">Cancel</label>
-      </div>
-    </div></div>
-
-    <!-- LOCAL NORM — describe by typing -->
-    <div class="ov typev" id="ovNormType">
-      <div class="vorb"><div class="h2"></div><div class="h1"></div><div class="o"><svg width="26" height="26" viewBox="0 0 38 38" fill="none"><rect x="14" y="8" width="10" height="18" rx="5" fill="#fff"/><path d="M9 22q0 9 10 9 10 0 10-9" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><rect x="17.5" y="30" width="3" height="5" fill="#fff"/></svg></div></div>
-      <div class="vstate" style="color:#8B5CF6">Type the local norm</div>
-      <div class="vtext" id="normTypeText" data-ex="“Drivers here zipper-merge at the cones — take turns at the merge point.”">“Drivers here zipper-merge at the cones — take turns at the merge point.”</div>
-      <div class="vbtns">
-        <label class="btn indigo" for="sc-localnorm" style="background:#8B5CF6">Continue</label>
-        <label class="btn grey" for="sc-norm"><svg width="20" height="20" viewBox="0 0 38 38" fill="none"><rect x="14" y="8" width="10" height="18" rx="5" fill="#1C1C1E"/><path d="M9 22q0 9 10 9 10 0 10-9" stroke="#1C1C1E" stroke-width="2.5" stroke-linecap="round"/><rect x="17.5" y="30" width="3" height="5" fill="#1C1C1E"/></svg>Speak instead</label>
         <label class="btn danger" for="sc-home">Cancel</label>
       </div>
     </div>
@@ -491,8 +447,7 @@
 
     <!-- DEMO CHIPS -->
     <div id="demo">
-      <label class="dchip" for="sc-request">Incoming right-turn request</label>
-      <label class="dchip" for="sc-notice">⚑ Local-norm notice</label>
+      <label class="dchip" for="sc-request">Yellow car detected</label>
       <label class="dchip" for="sc-coord">⤳ Agent coordination</label>
       <label class="dchip" for="sc-home"><span class="gd"></span>Reset to home</label>
     </div>
@@ -507,7 +462,7 @@
     window.addEventListener('resize',fit); window.addEventListener('orientationchange',fit); window.addEventListener('load',fit); fit();
 
     /* ----- functional keyboard ----- */
-    var fields={'sc-type':'typeText','sc-norm-type':'normTypeText'};
+    var fields={'sc-type':'typeText'};
     var bufs={}, started={};
     function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     function activeField(){ for(var k in fields){ var r=document.getElementById(k); if(r&&r.checked) return fields[k]; } return null; }
@@ -551,6 +506,9 @@
     var lastState=null;
     var lastStateReceivedAt=0;
     var lastStateSentAt=0;
+    var activeSimulatorSourceId='';
+    var activeSimulatorStartedAt=0;
+    var activeSimulatorSeenAt=0;
     var stateStaleAfterMs=2200;
     var vehiclesLayer=document.getElementById('vehicles');
     var routeTitle=document.getElementById('routeTitle');
@@ -561,11 +519,14 @@
     var liveLayerInitialized=false;
     var vehicleElements={};
     var liveIncomingRequestShown=false;
+    var agentWakeTimer=null;
+    var activeScenarioActivationId=null;
 
     function clamp(v,min,max){ return Math.min(max,Math.max(min,v)); }
     function lerp(a,b,t){ return a+(b-a)*t; }
     function smoothstep(t){ t=clamp(t,0,1); return t*t*(3-2*t); }
     function round(v){ return Math.round(Number(v)||0); }
+    function getSideRoadMapStart(c){ return c.turnX+c.turnRadius; }
     function setStatus(status,text){
       if(syncStatus) syncStatus.dataset.status=status;
       if(syncStatusText) syncStatusText.textContent=text;
@@ -582,6 +543,8 @@
         var message;
         try{ message=JSON.parse(event.data); }catch(e){ return; }
         if(message && message.type==='SIMULATOR_STATE') renderSimulatorState(message);
+        if(message && message.type==='CENTER_DISPLAY_AGENT_WAKE') showAgentWake(message);
+        if(message && message.type==='CENTER_DISPLAY_AGENT_REPLY') showAgentReply(message);
       });
       socket.addEventListener('close',function(){
         setStatus('offline','Simulator offline');
@@ -607,6 +570,84 @@
       socket.send(JSON.stringify(message));
       return true;
     }
+    var messageLabels={
+      thanks:{label:'Thank you',color:'#FF375F'},
+      sorry:{label:'Sorry',color:'#FF9F0A'},
+      goahead:{label:'Go ahead',color:'#34C759'},
+      emergency:{label:'Emergency',color:'#FF3B30'}
+    };
+    function getDetectedYellowCarRecipient(){
+      var vehicles=(lastState && lastState.vehicles) || [];
+      var vehicle=vehicles.find(function(item){
+        return item.coordinationRequest || item.mapRole==='incoming' || item.name==='incoming-right-turn-request';
+      });
+      return {
+        id:'incoming',
+        mode:'detected',
+        label:(vehicle && vehicle.label) || 'Yellow car',
+        vehicleName:vehicle && vehicle.name
+      };
+    }
+    function getSelectedRecipient(messageId){
+      if(messageId==='goahead') return getDetectedYellowCarRecipient();
+      var checked=document.querySelector('input[name="rtgt"]:checked');
+      var id=checked ? checked.id : 'rt-all';
+      if(id==='rt-all'){
+        return {id:'all',mode:'broadcast',label:'all nearby vehicles'};
+      }
+      var rowMap={
+        'rt-ahead':{row:'v-ahead',role:'ahead'},
+        'rt-right':{row:'v-right',role:'right'},
+        'rt-behind':{row:'v-behind',role:'incoming'}
+      };
+      var target=rowMap[id] || rowMap['rt-behind'];
+      var vehicle=(lastState && lastState.vehicles || []).find(function(item){ return item.mapRole===target.role; });
+      var row=document.getElementById(target.row);
+      var title=row && row.querySelector('.t b');
+      var label=(vehicle && vehicle.label) || (title && title.textContent) || 'detected vehicle';
+      return {id:target.role,mode:'single',label:label,vehicleName:vehicle && vehicle.name};
+    }
+    function updateSentConfirmation(messageId,recipient){
+      var meta=messageLabels[messageId] || messageLabels.goahead;
+      var title=document.getElementById('sentTitle');
+      var detail=document.getElementById('sentDetail');
+      if(title) title.textContent=meta.label+' sent';
+      if(detail){
+        detail.textContent=(recipient.mode==='broadcast' ? 'Broadcast to ' : 'Sent to ')+recipient.label+' · just now';
+      }
+    }
+    function bindCommunicationSends(){
+      document.querySelectorAll('[data-send-message]').forEach(function(control){
+        control.addEventListener('click',function(){
+          var messageId=control.getAttribute('data-send-message') || 'goahead';
+          var meta=messageLabels[messageId] || messageLabels.goahead;
+          var recipient=getSelectedRecipient(messageId);
+          updateSentConfirmation(messageId,recipient);
+          sendSimulatorMessage({
+            type:'CENTER_DISPLAY_MESSAGE_SENT',
+            protocolVersion:1,
+            source:'center-console',
+            message:{id:messageId,label:meta.label,color:meta.color},
+            recipient:recipient
+          });
+        });
+      });
+      document.querySelectorAll('[data-auto-send-message]').forEach(function(control){
+        control.addEventListener('click',function(){
+          var messageId=control.getAttribute('data-auto-send-message') || 'goahead';
+          var meta=messageLabels[messageId] || messageLabels.goahead;
+          var recipient=getSelectedRecipient(messageId);
+          updateSentConfirmation(messageId,recipient);
+          sendSimulatorMessage({
+            type:'CENTER_DISPLAY_MESSAGE_SENT',
+            protocolVersion:1,
+            source:'center-console',
+            message:{id:messageId,label:meta.label,color:meta.color},
+            recipient:recipient
+          });
+        });
+      });
+    }
     function vehicleColor(vehicle,index){
       if(vehicle.color) return vehicle.color;
       if(vehicle.emergency) return '#FFFFFF';
@@ -621,13 +662,13 @@
         turnX: 463,
         turnY: 312,
         turnZ: -33.2,
-        rightEndX: 1048,
+        rightEndX: 824,
         turnRadius: 74,
         approachEnd: .36,
         curveEnd: .74,
-        approachLaneScale: 18,
-        sideRoadStartX: 10.4,
-        sideRoadEndX: 738
+        approachLaneScale: 4,
+        sideRoadStartX: 13.5,
+        sideRoadEndX: 240
       };
     }
     function routeProgressToMap(progress){
@@ -653,8 +694,9 @@
         };
       }
       var sideT=smoothstep((p-turnEnd)/(1-turnEnd));
+      var sideMapStart=getSideRoadMapStart(c);
       return {
-        x:lerp(c.turnX+c.turnRadius,c.rightEndX,sideT),
+        x:lerp(sideMapStart,sideMapStart+6,sideT),
         y:c.turnY,
         rot:90
       };
@@ -671,13 +713,7 @@
       var routeProgress=Number(point.routeProgress);
       var isEgo=point.name==='ego' || point.mapRole==='ego';
       var routeBranch=point.routeBranch || '';
-      function keepEgoAdvancingThroughTurn(mapped){
-        if(!isEgo || routeBranch==='straight-through' || !isFinite(routeProgress) || routeProgress<=c.approachEnd) return mapped;
-        var progressMapped=routeProgressToMap(routeProgress);
-        if(progressMapped.x>mapped.x+10) return progressMapped;
-        return mapped;
-      }
-      if(isEgo && !hasWorldPose && isFinite(routeProgress) && routeBranch!=='straight-through' && routeProgress<.999){
+      if(isEgo && isFinite(routeProgress) && routeBranch!=='straight-through' && routeProgress<.995){
         return routeProgressToMap(routeProgress);
       }
       var isSideRoad=Boolean(point.sideRoad) || (worldX > c.sideRoadStartX-0.5 && Math.abs(worldZ-c.turnZ)<8);
@@ -685,33 +721,35 @@
         var sideMin=Math.min(c.sideRoadStartX,c.sideRoadEndX);
         var sideMax=Math.max(c.sideRoadStartX,c.sideRoadEndX);
         var sideT=clamp((worldX-sideMin)/(sideMax-sideMin),0,1);
+        var sideMapStart=getSideRoadMapStart(c);
         var roleOffset=point.mapRole==='incoming' ? -46 : point.mapRole==='cross' ? 38 : 0;
         var sideRot=yaw*180/Math.PI;
         if(isEgo && routeBranch==='right-turn') sideRot=Math.abs(sideRot);
-        return keepEgoAdvancingThroughTurn({
-          x:c.turnX+sideT*(c.rightEndX-c.turnX),
+        return {
+          x:sideMapStart+sideT*(c.rightEndX-sideMapStart),
           y:c.turnY+roleOffset+clamp((worldZ-c.turnZ)/6,-1,1)*26,
           rot: sideRot
-        });
+        };
       }
       var approachT=clamp((-worldZ)/Math.abs(c.turnZ),0,1);
       var beyondTurn=worldZ<c.turnZ ? clamp((Math.abs(worldZ)-Math.abs(c.turnZ))/38,0,1) : 0;
       var laneOffset=point.mapRole==='right' ? 24 : point.mapRole==='ahead' ? -18 : 0;
       var approachRot=yaw*180/Math.PI;
       if(isEgo && routeBranch==='right-turn') approachRot=Math.abs(approachRot);
-      return keepEgoAdvancingThroughTurn({
+      return {
         x:c.egoX+clamp(worldX,-5.8,5.8)*c.approachLaneScale,
         y:c.egoY-approachT*(c.egoY-c.turnY)-beyondTurn*74+laneOffset,
         rot: approachRot
-      });
+      };
     }
     function mapToSim(clientX,clientY){
       var rect=st.getBoundingClientRect();
       var stageX=(clientX-rect.left)*(1210/rect.width);
       var stageY=(clientY-rect.top)*(834/rect.height);
       var c=routeMapConstants();
-      if(stageX>c.turnX+48 && Math.abs(stageY-c.turnY)<95){
-        var sideT=clamp((stageX-c.turnX)/(c.rightEndX-c.turnX),0,1);
+      var sideMapStart=getSideRoadMapStart(c);
+      if(stageX>sideMapStart-26 && Math.abs(stageY-c.turnY)<95){
+        var sideT=clamp((stageX-sideMapStart)/(c.rightEndX-sideMapStart),0,1);
         return {
           x:Number((c.sideRoadStartX+sideT*(c.sideRoadEndX-c.sideRoadStartX)).toFixed(2)),
           z:Number((c.turnZ+clamp((stageY-c.turnY)/34,-1,1)*6).toFixed(2))
@@ -725,8 +763,8 @@
     function makeCar(className,x,y,color,rot,label,name){
       var car=document.createElement('div');
       car.className='car '+(className||'');
-      car.style.left=x+'px';
-      car.style.top=y+'px';
+      car.style.setProperty('--x',x+'px');
+      car.style.setProperty('--y',y+'px');
       car.style.background=color;
       car.style.setProperty('--rot',(rot||0)+'deg');
       if(label) car.title=label;
@@ -735,15 +773,30 @@
       return car;
     }
     function setCarElement(key,className,x,y,color,rot,label,name){
+      x=Number(x)||0;
+      y=Number(y)||0;
+      rot=Number(rot)||0;
       var car=vehicleElements[key];
       if(!car){
         car=makeCar(className,x,y,color,rot,label,name || key);
         vehicleElements[key]=car;
         vehiclesLayer.appendChild(car);
+        car.dataset.mapX=String(x);
+        car.dataset.mapY=String(y);
+        car.dataset.mapRot=String(rot || 0);
+      }else{
+        var previousRot=Number(car.dataset.mapRot);
+        if(isFinite(previousRot)){
+          var deltaRot=((rot-previousRot+540)%360)-180;
+          rot=previousRot+deltaRot;
+        }
+        car.dataset.mapX=String(x);
+        car.dataset.mapY=String(y);
+        car.dataset.mapRot=String(rot || 0);
       }
       car.className='car '+(className||'');
-      car.style.left=x+'px';
-      car.style.top=y+'px';
+      car.style.setProperty('--x',x+'px');
+      car.style.setProperty('--y',y+'px');
       car.style.background=color;
       car.style.setProperty('--rot',(rot||0)+'deg');
       if(label) car.title=label;
@@ -780,12 +833,49 @@
         if(swatch) swatch.style.background=vehicleColor(vehicle,0);
       });
     }
+    function acceptSimulatorSource(message){
+      var source=message.source || {};
+      var sourceId=source.id || 'simulator';
+      var sourceStartedAt=Number(source.startedAt)||0;
+      var now=Date.now();
+      if(!activeSimulatorSourceId){
+        activeSimulatorSourceId=sourceId;
+        activeSimulatorStartedAt=sourceStartedAt;
+        activeSimulatorSeenAt=now;
+        return true;
+      }
+      if(sourceId===activeSimulatorSourceId){
+        activeSimulatorSeenAt=now;
+        return true;
+      }
+      var currentSourceStale=now-activeSimulatorSeenAt>1500;
+      var incomingIsNewer=sourceStartedAt && (!activeSimulatorStartedAt || sourceStartedAt>activeSimulatorStartedAt+250);
+      if(currentSourceStale || incomingIsNewer){
+        activeSimulatorSourceId=sourceId;
+        activeSimulatorStartedAt=sourceStartedAt;
+        activeSimulatorSeenAt=now;
+        lastStateSentAt=0;
+        return true;
+      }
+      return false;
+    }
     function renderSimulatorState(message){
       if(!message || message.protocolVersion!==9) return;
+      if(!acceptSimulatorSource(message)) return;
       var sentAt=Number(message.sentAt)||0;
       if(sentAt && sentAt<=lastStateSentAt) return;
       lastStateReceivedAt=Date.now();
       if(sentAt) lastStateSentAt=sentAt;
+      var incomingActivationId=Number(message.state && message.state.scenarioActivationId);
+      if(isFinite(incomingActivationId)){
+        if(activeScenarioActivationId!==null && incomingActivationId!==activeScenarioActivationId){
+          var homeScreen=document.getElementById('sc-home');
+          if(homeScreen) homeScreen.checked=true;
+          liveIncomingRequestShown=false;
+          window.clearTimeout(agentWakeTimer);
+        }
+        activeScenarioActivationId=incomingActivationId;
+      }
       lastState=message;
       setStatus('connected','Simulator connected');
       var route=message.route || {};
@@ -833,6 +923,30 @@
       var mappedVehicles=[];
       liveKeys.ego=true;
       setCarElement('ego','ego',egoMapped.x,egoMapped.y,ego.color || '#2F6FEF',egoMapped.rot || 0,ego.label,ego.name);
+      (message.vehicles || []).forEach(function(vehicle,index){
+        if(vehicle.mapRole==='ego' || vehicle.name==='ego') return;
+        var mapped=simToMap(vehicle);
+        var key='vehicle-'+(vehicle.name || index);
+        var className=(vehicle.emergency ? 'emergency ' : '')+(vehicle.brake ? 'braking' : '');
+        liveKeys[key]=true;
+        setCarElement(
+          key,
+          className.trim(),
+          mapped.x,
+          mapped.y,
+          vehicleColor(vehicle,index),
+          mapped.rot || 0,
+          vehicle.label || vehicle.name,
+          vehicle.name || key
+        );
+        mappedVehicles.push({
+          name:vehicle.name,
+          label:vehicle.label,
+          mapRole:vehicle.mapRole,
+          world:{x:vehicle.x,z:vehicle.z,yaw:vehicle.yaw},
+          map:mapped
+        });
+      });
       updateVehicleRecipientLabels(message.vehicles || []);
       maybeShowIncomingRequest(message);
       removeStaleCars(liveKeys);
@@ -842,6 +956,7 @@
         routeProgress:ego.routeProgress,
         routeTitle:routeTitle ? routeTitle.textContent : '',
         routeSubtitle:routeSubtitle ? routeSubtitle.textContent : '',
+        source:{ id:activeSimulatorSourceId, startedAt:activeSimulatorStartedAt },
         ego:{ world:{ x:ego.x, z:ego.z, yaw:ego.yaw }, map:egoMapped },
         vehicles:mappedVehicles,
         raw:message
@@ -871,6 +986,31 @@
         liveIncomingRequestShown=false;
       }
     }
+    function showAgentWake(message){
+      var voiceScreen=document.getElementById('sc-voice');
+      var stateEl=document.querySelector('#ovVoice .vstate');
+      var textEl=document.querySelector('#ovVoice .vtext');
+      var transcript=(message && message.transcript) || 'Agent';
+      var assistantPrompt=(message && message.assistantPrompt) || 'What can I help you with?';
+      if(voiceScreen) voiceScreen.checked=true;
+      if(stateEl) stateEl.textContent='Agent ready';
+      if(textEl) textEl.innerHTML='“'+esc(transcript)+'”';
+      window.clearTimeout(agentWakeTimer);
+      agentWakeTimer=window.setTimeout(function(){
+        var stillVoice=voiceScreen && voiceScreen.checked;
+        if(!stillVoice || !textEl) return;
+        textEl.textContent=assistantPrompt;
+      },900);
+    }
+    function showAgentReply(message){
+      var voiceScreen=document.getElementById('sc-voice');
+      var stateEl=document.querySelector('#ovVoice .vstate');
+      var textEl=document.querySelector('#ovVoice .vtext');
+      if(voiceScreen) voiceScreen.checked=true;
+      if(stateEl) stateEl.textContent='Agent response';
+      if(textEl) textEl.textContent=(message && message.answer) || 'What would you like help with?';
+      window.clearTimeout(agentWakeTimer);
+    }
     function updateSignalDisplay(phase){
       var phases=['red','yellow','green'];
       phases.forEach(function(name){
@@ -879,6 +1019,7 @@
         el.setAttribute('opacity', phase===name ? '1' : '.28');
       });
     }
+    bindCommunicationSends();
     connect();
     window.setInterval(checkStateFreshness,1000);
   })();

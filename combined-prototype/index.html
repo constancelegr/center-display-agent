@@ -65,6 +65,9 @@
           <button class="icon-button" id="pauseToggle" type="button" aria-pressed="false" title="Pause motion">
             <i data-lucide="pause"></i>
           </button>
+          <button class="icon-button agent-talk-button" id="agentTalkButton" type="button" aria-pressed="false" title="Talk to agent">
+            <i data-lucide="mic"></i>
+          </button>
         </div>
       </header>
 
@@ -104,6 +107,40 @@
               <em class="choice-tag">Override</em>
             </span>
           </button>
+        </div>
+      </section>
+
+      <section class="agent-voice-panel" id="agentVoicePanel" aria-live="polite" aria-hidden="true">
+        <div class="agent-header">
+          <span class="agent-orb" aria-hidden="true"></span>
+          <div class="agent-heading">
+            <strong id="agentVoiceStatus">Agent</strong>
+          </div>
+          <button class="agent-collapse" id="agentCollapseButton" type="button" aria-label="Collapse agent prompt" aria-expanded="true">
+            <i data-lucide="chevron-up"></i>
+          </button>
+        </div>
+        <p id="agentVoicePrompt">Drive forward. I’ll ask before showing assistance visuals.</p>
+        <div class="agent-transcript" id="agentVoiceTranscript">Tap the mic and say “hold” or “proceed.”</div>
+        <div class="agent-voice-debug" id="agentVoiceDebug">Voice: waiting for mic.</div>
+        <div class="agent-actions">
+          <button id="agentHoldChoice" type="button">
+            <i data-lucide="hand"></i>
+            <span>Hold</span>
+          </button>
+          <button id="agentProceedChoice" type="button">
+            <i data-lucide="arrow-right"></i>
+            <span>Proceed</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="sender-perspective" id="senderPerspective" aria-live="polite" aria-hidden="true">
+        <div class="sender-icon" id="senderPerspectiveIcon"><i data-lucide="send"></i></div>
+        <div>
+          <small>Sender perspective</small>
+          <strong id="senderPerspectiveTitle">Message sent</strong>
+          <span id="senderPerspectiveDetail">Recipient confirmed</span>
         </div>
       </section>
 

@@ -903,10 +903,10 @@ button {
 .interpretation {
   left: 50%;
   bottom: 28vh;
-  width: min(520px, calc(100vw - 36px));
+  width: min(440px, calc(100vw - 36px));
   transform: translateX(-50%);
-  border-radius: 24px;
-  padding: 18px 20px;
+  border-radius: 20px;
+  padding: 14px 16px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 244, 246, 0.86)),
     var(--panel);
@@ -918,7 +918,7 @@ button {
   flex-wrap: wrap;
   gap: 8px;
   font-weight: 720;
-  font-size: clamp(14px, 2vw, 18px);
+  font-size: 15px;
 }
 
 .signal-dot {
@@ -945,20 +945,20 @@ button {
 }
 
 .interpretation p {
-  margin: 9px 0 14px;
+  margin: 7px 0 10px;
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.48;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .next-move {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid rgba(28, 28, 30, 0.1);
   color: #188a3a;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .next-move svg {
@@ -982,48 +982,58 @@ button {
   left: 22px;
   top: 92px;
   bottom: auto;
-  width: min(480px, calc(100vw - 44px));
+  width: min(410px, calc(100vw - 44px));
   transform: none;
+}
+
+.interpretation.is-ambiguous {
+  border-color: rgba(10, 132, 255, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 34px rgba(28, 28, 30, 0.16);
+}
+
+.interpretation.is-ambiguous .signal-dot {
+  background: var(--blue);
+  box-shadow: 0 0 0 5px rgba(10, 132, 255, 0.12);
 }
 
 .decision-button {
   position: relative;
-  min-height: 76px;
+  min-height: 66px;
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  padding: 10px 11px;
-  border: 1px solid rgba(224, 249, 247, 0.12);
-  border-radius: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(28, 28, 30, 0.08);
+  border-radius: 14px;
   color: var(--ink);
-  background: rgba(7, 12, 15, 0.76);
+  background: rgba(244, 244, 246, 0.94);
   cursor: pointer;
   text-align: left;
 }
 
 .decision-button:hover {
-  border-color: rgba(142, 233, 223, 0.34);
-  background: rgba(13, 23, 26, 0.8);
+  border-color: rgba(10, 132, 255, 0.24);
+  background: rgba(239, 239, 241, 0.98);
 }
 
 .decision-button.is-recommended {
-  border-color: rgba(255, 209, 102, 0.58);
-  background:
-    linear-gradient(180deg, rgba(255, 209, 102, 0.14), rgba(7, 12, 15, 0.74));
-  box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.1);
+  border-color: rgba(52, 199, 89, 0.3);
+  background: rgba(52, 199, 89, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(52, 199, 89, 0.05);
 }
 
 .decision-button.is-active {
-  border-color: rgba(158, 232, 177, 0.68);
-  background: rgba(42, 95, 64, 0.24);
-  box-shadow: inset 0 0 0 1px rgba(158, 232, 177, 0.1);
+  border-color: rgba(10, 132, 255, 0.34);
+  background: rgba(10, 132, 255, 0.11);
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.06);
 }
 
 .decision-button svg {
   width: 19px;
   height: 19px;
-  color: var(--aqua);
+  color: var(--blue);
 }
 
 .decision-button strong,
@@ -1052,9 +1062,9 @@ button {
   margin-top: 6px;
   padding: 3px 6px;
   border-radius: 999px;
-  border: 1px solid rgba(224, 249, 247, 0.14);
-  color: rgba(238, 247, 244, 0.84);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(28, 28, 30, 0.09);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.76);
   font-size: 9px;
   font-style: normal;
   font-weight: 750;
@@ -1062,15 +1072,238 @@ button {
 }
 
 .decision-button.is-recommended .choice-tag {
-  border-color: rgba(255, 209, 102, 0.42);
-  color: #fff0bd;
-  background: rgba(255, 209, 102, 0.12);
+  border-color: rgba(52, 199, 89, 0.2);
+  color: #188a3a;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .decision-button.is-active .choice-tag {
-  border-color: rgba(151, 246, 176, 0.38);
-  color: #d7ffef;
-  background: rgba(151, 246, 176, 0.12);
+  border-color: rgba(10, 132, 255, 0.2);
+  color: #0a5fd1;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.agent-voice-panel,
+.sender-perspective {
+  position: fixed;
+  z-index: 5;
+  pointer-events: auto;
+  border: 1px solid rgba(28, 28, 30, 0.12);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px) saturate(112%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(16px);
+  transition:
+    opacity 180ms ease,
+    visibility 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.agent-voice-panel.is-visible,
+.sender-perspective.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+body.agent-panel-expanded .interpretation {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.agent-voice-panel {
+  left: 22px;
+  top: 92px;
+  width: min(380px, calc(100vw - 44px));
+  padding: 14px;
+  border-radius: 20px;
+}
+
+.agent-header,
+.sender-perspective {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.agent-header {
+  min-height: 48px;
+}
+
+.sender-icon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: #fff;
+  background: linear-gradient(135deg, #7a78ff, #5e5ce6);
+  box-shadow: 0 4px 12px rgba(94, 92, 230, 0.26);
+}
+
+.agent-orb {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow:
+    0 0 0 6px rgba(52, 199, 89, 0.14),
+    0 0 18px rgba(52, 199, 89, 0.44);
+}
+
+.sender-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.2;
+}
+
+.sender-perspective small {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agent-header strong,
+.sender-perspective strong {
+  display: block;
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.agent-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-collapse {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--chip, #efeff1);
+  cursor: pointer;
+}
+
+.agent-collapse svg {
+  width: 19px;
+  height: 19px;
+}
+
+.agent-voice-panel p {
+  margin: 12px 0 9px;
+  color: #3a3a3c;
+  font-size: 15px;
+  font-weight: 620;
+  line-height: 1.36;
+}
+
+.agent-transcript {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  color: #4b49c7;
+  background: rgba(94, 92, 230, 0.1);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.agent-voice-debug {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.agent-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.agent-voice-panel.is-notice .agent-actions {
+  display: none;
+}
+
+.agent-voice-panel.is-collapsed {
+  width: min(320px, calc(100vw - 44px));
+  padding: 10px 12px;
+  border-radius: 999px;
+}
+
+.agent-voice-panel.is-collapsed .agent-orb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.agent-voice-panel.is-collapsed .agent-collapse svg {
+  transform: rotate(180deg);
+}
+
+.agent-voice-panel.is-collapsed #agentVoicePrompt,
+.agent-voice-panel.is-collapsed .agent-transcript,
+.agent-voice-panel.is-collapsed .agent-voice-debug,
+.agent-voice-panel.is-collapsed .agent-actions {
+  display: none;
+}
+
+.agent-actions button {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 16px;
+  color: #fff;
+  background: var(--blue);
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 720;
+}
+
+.agent-actions button:first-child {
+  background: var(--green);
+}
+
+.agent-actions button svg {
+  width: 19px;
+  height: 19px;
+}
+
+.agent-talk-button.is-listening {
+  color: #fff;
+  background: linear-gradient(135deg, #7a78ff, #5e5ce6);
+  box-shadow: 0 0 0 6px rgba(94, 92, 230, 0.16);
+}
+
+.sender-perspective {
+  right: 22px;
+  bottom: 24px;
+  width: min(350px, calc(100vw - 44px));
+  padding: 14px 16px 14px 14px;
+  border-radius: 20px;
+}
+
+.sender-perspective span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .webgl-fallback {
