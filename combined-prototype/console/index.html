@@ -34,7 +34,18 @@
   @media (max-height:620px) and (min-aspect-ratio:1210/834){#stage{--s:.72}}
   @media (max-height:540px) and (min-aspect-ratio:1210/834){#stage{--s:.63}}
   .sr{position:absolute;width:0;height:0;opacity:0;pointer-events:none;overflow:hidden}
-  .map{position:absolute;inset:0;z-index:0}
+  .map{position:absolute;inset:0;z-index:0;background:#DADADA}
+  .map-grid{opacity:.16}
+  .map-park{fill:#BDECAE;opacity:.92}
+  .map-local-road{fill:none;stroke:#C4C7C2;stroke-width:13;stroke-linecap:round;stroke-linejoin:round}
+  .map-local-road.inner{stroke:#F9F9F7;stroke-width:9}
+  .map-minor-road{fill:none;stroke:#C1C5C0;stroke-width:18;stroke-linecap:round}
+  .map-minor-road.inner{stroke:#fff;stroke-width:12}
+  .map-road{fill:none;stroke:#BFC3BE;stroke-width:72;stroke-linecap:round;stroke-linejoin:round}
+  .map-road.inner{stroke:#F8F8F6;stroke-width:52}
+  .map-road-divider{fill:none;stroke:#D7D9D2;stroke-width:3;stroke-linecap:round;stroke-dasharray:18 24}
+  .map-street-label{fill:#46484C;font-size:17px;font-weight:650;paint-order:stroke;stroke:#E1E1E1;stroke-width:4px;stroke-linejoin:round}
+  .map-destination{filter:drop-shadow(0 3px 7px rgba(0,0,0,.18))}
   .arc{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .4s}
   .vehicles{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .35s}
   .map-ego-static{transition:opacity .18s ease}
@@ -44,10 +55,10 @@
   .car i.w1{top:6px;width:20px;height:12px}
   .car i.w2{top:27px;width:20px;height:9px;background:rgba(255,255,255,.5)}
   .vehicles.is-live{opacity:1}
-  .car.ego{width:96px;height:96px;border-radius:50%;background:rgba(47,111,239,.18);box-shadow:none}
+  .car.ego{width:76px;height:76px;border-radius:50%;background:rgba(47,111,239,.18);box-shadow:0 0 0 1px rgba(47,111,239,.08)}
   .car.ego i{display:none}
-  .car.ego::before{content:"";position:absolute;inset:22px;border-radius:50%;background:#fff}
-  .car.ego::after{content:"";position:absolute;inset:31px;border-radius:50%;background:#2F6FEF}
+  .car.ego::before{content:"";position:absolute;inset:17px;border-radius:50%;background:#fff;box-shadow:0 3px 9px rgba(0,0,0,.18)}
+  .car.ego::after{content:"";position:absolute;left:27px;top:20px;width:22px;height:30px;background:#2F6FEF;clip-path:polygon(50% 0,100% 100%,50% 78%,0 100%);filter:drop-shadow(0 1px 1px rgba(0,0,0,.24))}
   .car.emergency{background:#fff;box-shadow:0 0 0 6px rgba(255,59,48,.16),0 2px 7px rgba(0,0,0,.3)}
   .car.braking:not(.ego)::after{content:"";position:absolute;left:4px;right:4px;bottom:4px;height:5px;border-radius:4px;background:#FF3B30}
   .console-cone{position:absolute;width:26px;height:30px;transform:translate(-50%,-50%);filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))}
@@ -260,40 +271,40 @@
   <div id="stage">
     <!-- MAP -->
     <svg class="map" viewBox="0 0 1210 834" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-      <rect width="1210" height="834" fill="#E7E5DE"/>
-      <ellipse cx="1090" cy="110" rx="430" ry="320" fill="#B0D2EC"/>
-      <ellipse cx="1170" cy="760" rx="200" ry="160" fill="#B0D2EC"/>
-      <rect x="470" y="-40" width="250" height="200" rx="38" fill="#C9E3B5"/>
-      <rect x="-60" y="560" width="380" height="320" rx="42" fill="#C9E3B5"/>
-      <line x1="-140" y1="270" x2="1360" y2="70" stroke="#E6CB7C" stroke-width="32" stroke-linecap="round"/>
-      <line x1="-140" y1="270" x2="1360" y2="70" stroke="#F4DD96" stroke-width="24" stroke-linecap="round"/>
-      <g stroke="#D8D6CE" stroke-width="28" stroke-linecap="round">
-        <line x1="-20" y1="150" x2="1230" y2="150"/><line x1="-20" y1="530" x2="1230" y2="530"/>
-        <line x1="235" y1="-20" x2="235" y2="900"/><line x1="890" y1="-20" x2="890" y2="900"/>
+      <defs>
+        <pattern id="navGrid" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M96 0H0V96" fill="none" stroke="#DDE1D7" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <rect width="1210" height="834" fill="#DADADA"/>
+      <rect class="map-grid" width="1210" height="834" fill="url(#navGrid)"/>
+      <g id="mapParks"></g>
+      <g id="mapLocalRoads"></g>
+      <path id="mapMinorRoadA" class="map-minor-road" d=""/>
+      <path id="mapMinorRoadAInner" class="map-minor-road inner" d=""/>
+      <path id="mapMinorRoadB" class="map-minor-road" d=""/>
+      <path id="mapMinorRoadBInner" class="map-minor-road inner" d=""/>
+      <path id="mapMainRoad" class="map-road" d=""/>
+      <path id="mapCrossRoad" class="map-road" d=""/>
+      <path id="mapMainRoadInner" class="map-road inner" d=""/>
+      <path id="mapCrossRoadInner" class="map-road inner" d=""/>
+      <path id="mapMainDivider" class="map-road-divider" d=""/>
+      <path id="mapCrossDivider" class="map-road-divider" d=""/>
+      <g id="mapStreetLabels"></g>
+      <g id="mapDestination" class="map-destination" transform="translate(824 312)">
+        <circle r="18" fill="#FF3B30" stroke="#fff" stroke-width="4"/>
+        <circle r="5" fill="#fff"/>
       </g>
-      <g stroke="#ffffff" stroke-width="18" stroke-linecap="round">
-        <line x1="-20" y1="150" x2="1230" y2="150"/><line x1="-20" y1="530" x2="1230" y2="530"/>
-        <line x1="235" y1="-20" x2="235" y2="900"/><line x1="890" y1="-20" x2="890" y2="900"/>
-      </g>
-      <path d="M463 820 L463 118" fill="none" stroke="#D8D6CE" stroke-width="58" stroke-linecap="round"/>
-      <path d="M463 312 L1035 312" fill="none" stroke="#D8D6CE" stroke-width="58" stroke-linecap="round"/>
-      <path d="M463 820 L463 118" fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round"/>
-      <path d="M463 312 L1035 312" fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round"/>
-      <path d="M463 742 L463 386 Q463 312 537 312 L824 312" fill="none" stroke="#1B5BD0" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M463 742 L463 386 Q463 312 537 312 L824 312" fill="none" stroke="#2F6FEF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="610" y="286" fill="#6B6B70" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="18" font-weight="600">Bohlman Rd</text>
       <g id="mapSignal" transform="translate(374 176)">
         <rect x="0" y="0" width="30" height="82" rx="14" fill="#1C1C1E"/>
         <circle id="mapSigRed" cx="15" cy="17" r="8" fill="#FF3B30" opacity=".35"/>
         <circle id="mapSigYellow" cx="15" cy="41" r="8" fill="#FFCC00" opacity=".35"/>
         <circle id="mapSigGreen" cx="15" cy="65" r="8" fill="#34C759" opacity=".35"/>
       </g>
-      <circle cx="824" cy="312" r="18" fill="#FF3B30" stroke="#fff" stroke-width="4"/>
-      <circle cx="824" cy="312" r="5" fill="#fff"/>
       <g class="map-ego-static">
-        <circle cx="463" cy="742" r="48" fill="rgba(47,111,239,.18)"/>
-        <circle cx="463" cy="742" r="26" fill="#fff"/>
-        <circle cx="463" cy="742" r="17" fill="#2F6FEF"/>
+        <circle cx="605" cy="500" r="38" fill="rgba(47,111,239,.18)"/>
+        <circle cx="605" cy="500" r="21" fill="#fff"/>
+        <path d="M605 481 L618 522 L605 514 L592 522 Z" fill="#2F6FEF"/>
       </g>
     </svg>
 
@@ -498,7 +509,7 @@
     var params=new URLSearchParams(window.location.search);
     var configuredWs=params.get('simWs');
     var simHost=params.get('simHost') || window.location.hostname || '127.0.0.1';
-    var simPort=params.get('simPort') || '5175';
+    var simPort=params.get('simPort') || window.location.port || '5175';
     var protocol=window.location.protocol==='https:' ? 'wss:' : 'ws:';
     var socketUrl=configuredWs || (protocol+'//'+simHost+':'+simPort+'/social-lens-sync');
     var socket=null;
@@ -516,6 +527,23 @@
     var syncStatus=document.getElementById('syncStatus');
     var syncStatusText=document.getElementById('syncStatusText');
     var staticEgoMarker=document.querySelector('.map-ego-static');
+    var mapEls={
+      mainRoad:document.getElementById('mapMainRoad'),
+      mainRoadInner:document.getElementById('mapMainRoadInner'),
+      mainDivider:document.getElementById('mapMainDivider'),
+      crossRoad:document.getElementById('mapCrossRoad'),
+      crossRoadInner:document.getElementById('mapCrossRoadInner'),
+      crossDivider:document.getElementById('mapCrossDivider'),
+      minorA:document.getElementById('mapMinorRoadA'),
+      minorAInner:document.getElementById('mapMinorRoadAInner'),
+      minorB:document.getElementById('mapMinorRoadB'),
+      minorBInner:document.getElementById('mapMinorRoadBInner'),
+      localRoads:document.getElementById('mapLocalRoads'),
+      parks:document.getElementById('mapParks'),
+      streetLabels:document.getElementById('mapStreetLabels'),
+      destination:document.getElementById('mapDestination'),
+      signal:document.getElementById('mapSignal')
+    };
     var liveLayerInitialized=false;
     var vehicleElements={};
     var liveIncomingRequestShown=false;
@@ -657,108 +685,229 @@
     }
     function routeMapConstants(){
       return {
-        egoX: 463,
-        egoY: 742,
-        turnX: 463,
-        turnY: 312,
-        turnZ: -33.2,
-        rightEndX: 824,
-        turnRadius: 74,
-        approachEnd: .36,
-        curveEnd: .74,
-        approachLaneScale: 4,
-        sideRoadStartX: 13.5,
-        sideRoadEndX: 240
+        centerX:605,
+        centerY:500,
+        pxPerMeter:9.4,
+        turnZ:-33.2,
+        entryX:0,
+        finalX:18.2825,
+        turnRadius:7.2,
+        approachEnd:.36,
+        curveEnd:.74,
+        destinationX:238.2825,
+        mainRoadHalfWidth:3.9,
+        sideRoadHalfWidth:5.9
       };
     }
-    function routeProgressToMap(progress){
+    function getMapFrame(ego){
+      var c=routeMapConstants();
+      var yaw=Number(ego && ego.yaw);
+      return {
+        x:Number(ego && ego.x)||0,
+        z:Number(ego && ego.z)||0,
+        yaw:isFinite(yaw) ? yaw : 0,
+        centerX:c.centerX,
+        centerY:c.centerY,
+        scale:c.pxPerMeter
+      };
+    }
+    function worldToMap(point,frame){
+      var f=frame || getMapFrame(lastState && lastState.ego);
+      var dx=(Number(point.x)||0)-f.x;
+      var dz=(Number(point.z)||0)-f.z;
+      var cos=Math.cos(f.yaw);
+      var sin=Math.sin(f.yaw);
+      var right=dx*cos-dz*sin;
+      var forward=-dx*sin-dz*cos;
+      return {
+        x:f.centerX+right*f.scale,
+        y:f.centerY-forward*f.scale
+      };
+    }
+    function mapToWorld(stageX,stageY,frame){
+      var f=frame || getMapFrame(lastState && lastState.ego);
+      var right=(stageX-f.centerX)/f.scale;
+      var forward=(f.centerY-stageY)/f.scale;
+      var cos=Math.cos(f.yaw);
+      var sin=Math.sin(f.yaw);
+      return {
+        x:f.x+right*cos-forward*sin,
+        z:f.z-right*sin-forward*cos
+      };
+    }
+    function pointPath(points){
+      return points.map(function(point,index){
+        return (index ? 'L' : 'M')+round(point.x)+' '+round(point.y);
+      }).join(' ');
+    }
+    function svgPointList(points){
+      return points.map(function(point){ return round(point.x)+','+round(point.y); }).join(' ');
+    }
+    function setPath(el,points){
+      if(el) el.setAttribute('d',pointPath(points));
+    }
+    function createSvg(tag,attrs){
+      var el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+      Object.keys(attrs || {}).forEach(function(key){ el.setAttribute(key,attrs[key]); });
+      return el;
+    }
+    function getRouteWorldPoint(progress,options){
       var c=routeMapConstants();
       var p=clamp(Number(progress)||0,0,1);
-      var approachEnd=c.approachEnd;
-      var turnEnd=c.curveEnd;
-      if(p<=approachEnd){
-        var approachT=smoothstep(p/approachEnd);
+      var entryZ=c.turnZ+c.turnRadius;
+      if(p<=c.approachEnd){
+        var approachT=smoothstep(p/c.approachEnd);
         return {
-          x:c.turnX,
-          y:lerp(c.egoY,c.turnY+c.turnRadius,approachT),
-          rot:0
+          x:lerp(0,c.entryX,approachT),
+          z:lerp(0,entryZ,approachT),
+          yaw:0
         };
       }
-      if(p<=turnEnd){
-        var turnT=smoothstep((p-approachEnd)/(turnEnd-approachEnd));
-        var theta=Math.PI-(Math.PI/2)*turnT;
+      if(p<=c.curveEnd){
+        var turnT=smoothstep((p-c.approachEnd)/(c.curveEnd-c.approachEnd));
+        var theta=Math.PI+(Math.PI/2)*turnT;
         return {
-          x:c.turnX+c.turnRadius+c.turnRadius*Math.cos(theta),
-          y:c.turnY+c.turnRadius-c.turnRadius*Math.sin(theta),
-          rot:90*turnT
+          x:c.entryX+c.turnRadius+c.turnRadius*Math.cos(theta),
+          z:entryZ+c.turnRadius*Math.sin(theta),
+          yaw:-Math.PI/2*turnT
         };
       }
-      var sideT=smoothstep((p-turnEnd)/(1-turnEnd));
-      var sideMapStart=getSideRoadMapStart(c);
+      var sideT=smoothstep((p-c.curveEnd)/(1-c.curveEnd));
       return {
-        x:lerp(sideMapStart,sideMapStart+6,sideT),
-        y:c.turnY,
-        rot:90
+        x:lerp(c.entryX+c.turnRadius,c.finalX,sideT),
+        z:c.turnZ,
+        yaw:-Math.PI/2
       };
     }
-    function simToMap(point){
+    function sampleRouteWorldPath(message){
       var c=routeMapConstants();
-      var rawWorldX=Number(point.x);
-      var rawWorldZ=Number(point.z);
-      var rawYaw=Number(point.yaw);
-      var hasWorldPose=isFinite(rawWorldX) && isFinite(rawWorldZ);
-      var worldX=hasWorldPose ? rawWorldX : 0;
-      var worldZ=hasWorldPose ? rawWorldZ : 0;
-      var yaw=isFinite(rawYaw) ? rawYaw : 0;
-      var routeProgress=Number(point.routeProgress);
-      var isEgo=point.name==='ego' || point.mapRole==='ego';
-      var routeBranch=point.routeBranch || '';
-      if(isEgo && isFinite(routeProgress) && routeBranch!=='straight-through' && routeProgress<.995){
-        return routeProgressToMap(routeProgress);
+      var simState=(message && message.state) || {};
+      var routeBranch=(message && message.ego && message.ego.routeBranch) || simState.routeBranch || '';
+      if(routeBranch==='straight-through'){
+        return [{x:0,z:90},{x:0,z:-130}];
       }
-      var isSideRoad=Boolean(point.sideRoad) || (worldX > c.sideRoadStartX-0.5 && Math.abs(worldZ-c.turnZ)<8);
-      if(isSideRoad){
-        var sideMin=Math.min(c.sideRoadStartX,c.sideRoadEndX);
-        var sideMax=Math.max(c.sideRoadStartX,c.sideRoadEndX);
-        var sideT=clamp((worldX-sideMin)/(sideMax-sideMin),0,1);
-        var sideMapStart=getSideRoadMapStart(c);
-        var roleOffset=point.mapRole==='incoming' ? -46 : point.mapRole==='cross' ? 38 : 0;
-        var sideRot=yaw*180/Math.PI;
-        if(isEgo && routeBranch==='right-turn') sideRot=Math.abs(sideRot);
-        return {
-          x:sideMapStart+sideT*(c.rightEndX-sideMapStart),
-          y:c.turnY+roleOffset+clamp((worldZ-c.turnZ)/6,-1,1)*26,
-          rot: sideRot
-        };
+      var points=[];
+      for(var i=0;i<=34;i+=1) points.push(getRouteWorldPoint(i/34));
+      var destinationRemaining=Number(simState.routeDestinationRemaining);
+      var endX=isFinite(destinationRemaining) ? c.finalX+Math.max(40,Math.min(220,destinationRemaining)) : c.destinationX;
+      points.push({x:endX,z:c.turnZ});
+      return points;
+    }
+    function renderStreetText(group,point,text,rotation){
+      var el=createSvg('text',{
+        x:round(point.x),
+        y:round(point.y),
+        class:'map-street-label',
+        transform:'rotate('+round(rotation||0)+' '+round(point.x)+' '+round(point.y)+')'
+      });
+      el.textContent=text;
+      group.appendChild(el);
+    }
+    function nearestWorldAnchor(center,spacing,offset){
+      return Math.round(((Number(center)||0)-(offset||0))/spacing)*spacing+(offset||0);
+    }
+    function worldAnchorsAround(center,spacing,minDelta,maxDelta,offset){
+      var values=[];
+      var start=Math.floor(((Number(center)||0)+minDelta-(offset||0))/spacing)*spacing+(offset||0);
+      var end=(Number(center)||0)+maxDelta;
+      for(var value=start;value<=end;value+=spacing) values.push(value);
+      return values.length ? values : [nearestWorldAnchor(center,spacing,offset||0)];
+    }
+    function renderMapParks(frame){
+      if(!mapEls.parks) return;
+      var parks=[
+        [{x:-70,z:frame.z+52},{x:-33,z:frame.z+66},{x:-12,z:frame.z+45},{x:-22,z:frame.z+21},{x:-62,z:frame.z+15}],
+        [{x:38,z:frame.z-44},{x:82,z:frame.z-34},{x:93,z:frame.z-67},{x:56,z:frame.z-86},{x:28,z:frame.z-70}],
+        [{x:74,z:frame.z+76},{x:126,z:frame.z+68},{x:118,z:frame.z+38},{x:86,z:frame.z+28}]
+      ];
+      mapEls.parks.innerHTML='';
+      parks.forEach(function(poly){
+        var points=poly.map(function(point){ return worldToMap(point,frame); });
+        mapEls.parks.appendChild(createSvg('polygon',{class:'map-park',points:svgPointList(points)}));
+      });
+    }
+    function renderLocalStreetNetwork(frame){
+      if(!mapEls.localRoads || !mapEls.streetLabels) return;
+      var c=routeMapConstants();
+      var group=mapEls.localRoads;
+      var labels=mapEls.streetLabels;
+      var avenueNames=['9th Ave','10th Ave','11th Ave','12th Ave','14th Ave','15th Ave','16th Ave','17th Ave','18th Ave','19th Ave','20th Ave','21st Ave','22nd Ave'];
+      var streetNames=['Santiago St','Rivera St','Quintara St','Pacheco St','Ortega St','Noriega St','Moraga St'];
+      var verticalXs=[];
+      var horizontalZs=[];
+      for(var x=Math.floor((frame.x-95)/12)*12;x<=frame.x+120;x+=12){
+        if(Math.abs(x)<8 || Math.abs(x-c.finalX)<8) continue;
+        verticalXs.push(x);
       }
-      var approachT=clamp((-worldZ)/Math.abs(c.turnZ),0,1);
-      var beyondTurn=worldZ<c.turnZ ? clamp((Math.abs(worldZ)-Math.abs(c.turnZ))/38,0,1) : 0;
-      var laneOffset=point.mapRole==='right' ? 24 : point.mapRole==='ahead' ? -18 : 0;
-      var approachRot=yaw*180/Math.PI;
-      if(isEgo && routeBranch==='right-turn') approachRot=Math.abs(approachRot);
+      for(var z=Math.floor((frame.z-105)/15)*15;z<=frame.z+95;z+=15){
+        if(Math.abs(z-c.turnZ)<9) continue;
+        horizontalZs.push(z);
+      }
+      var html='';
+      verticalXs.forEach(function(x,index){
+        var path=pointPath([{x:x,z:frame.z+112},{x:x+5,z:frame.z+56},{x:x-4,z:frame.z+4},{x:x+3,z:frame.z-120}].map(function(p){ return worldToMap(p,frame); }));
+        html+='<path class="map-local-road" d="'+path+'"/><path class="map-local-road inner" d="'+path+'"/>';
+      });
+      horizontalZs.forEach(function(z){
+        var path=pointPath([{x:frame.x-118,z:z},{x:frame.x-55,z:z+1.8},{x:frame.x+12,z:z-1.4},{x:frame.x+128,z:z}].map(function(p){ return worldToMap(p,frame); }));
+        html+='<path class="map-local-road" d="'+path+'"/><path class="map-local-road inner" d="'+path+'"/>';
+      });
+      group.innerHTML=html;
+      labels.innerHTML='';
+      var verticalLabelZs=worldAnchorsAround(frame.z,72,-96,96,-42);
+      var horizontalLabelXs=worldAnchorsAround(frame.x,86,-118,118,-52);
+      verticalXs.slice(0,8).forEach(function(x,index){
+        var labelPoint=worldToMap({x:x+1.4,z:verticalLabelZs[index%verticalLabelZs.length]},frame);
+        renderStreetText(labels,labelPoint,avenueNames[Math.abs(Math.round(x/12)+6)%avenueNames.length],-frame.yaw*180/Math.PI-82);
+      });
+      horizontalZs.slice(0,7).forEach(function(z,index){
+        var labelPoint=worldToMap({x:horizontalLabelXs[index%horizontalLabelXs.length],z:z-1.5},frame);
+        renderStreetText(labels,labelPoint,streetNames[Math.abs(Math.round(z/15)+4)%streetNames.length],-frame.yaw*180/Math.PI);
+      });
+    }
+    function renderLiveMap(message){
+      var ego=(message && message.ego) || {x:0,z:0,yaw:0};
+      var frame=getMapFrame(ego);
+      var c=routeMapConstants();
+      var main=[{x:0,z:frame.z+95},{x:0,z:frame.z-135}].map(function(p){ return worldToMap(p,frame); });
+      var cross=[{x:frame.x-95,z:c.turnZ},{x:frame.x+135,z:c.turnZ}].map(function(p){ return worldToMap(p,frame); });
+      var minorA=[{x:-38,z:frame.z+70},{x:76,z:frame.z-74}].map(function(p){ return worldToMap(p,frame); });
+      var minorB=[{x:frame.x-82,z:c.turnZ+40},{x:frame.x+88,z:c.turnZ+40}].map(function(p){ return worldToMap(p,frame); });
+      renderMapParks(frame);
+      renderLocalStreetNetwork(frame);
+      setPath(mapEls.mainRoad,main);
+      setPath(mapEls.mainRoadInner,main);
+      setPath(mapEls.mainDivider,main);
+      setPath(mapEls.crossRoad,cross);
+      setPath(mapEls.crossRoadInner,cross);
+      setPath(mapEls.crossDivider,cross);
+      setPath(mapEls.minorA,minorA);
+      setPath(mapEls.minorAInner,minorA);
+      setPath(mapEls.minorB,minorB);
+      setPath(mapEls.minorBInner,minorB);
+      var destination=worldToMap({x:c.destinationX,z:c.turnZ},frame);
+      if(mapEls.destination) mapEls.destination.setAttribute('transform','translate('+round(destination.x)+' '+round(destination.y)+')');
+      var signal=worldToMap({x:6.35,z:c.turnZ+8.2},frame);
+      if(mapEls.signal) mapEls.signal.setAttribute('transform','translate('+(round(signal.x)-15)+' '+(round(signal.y)-41)+')');
+      return frame;
+    }
+    function simToMap(point,frame){
+      var isEgo=point && (point.name==='ego' || point.mapRole==='ego');
+      var f=frame || getMapFrame(isEgo ? point : (lastState && lastState.ego));
+      var yaw=Number(point && point.yaw);
+      var mapped=isEgo ? {x:f.centerX,y:f.centerY} : worldToMap(point || {},f);
       return {
-        x:c.egoX+clamp(worldX,-5.8,5.8)*c.approachLaneScale,
-        y:c.egoY-approachT*(c.egoY-c.turnY)-beyondTurn*74+laneOffset,
-        rot: approachRot
+        x:mapped.x,
+        y:mapped.y,
+        rot:isEgo ? 0 : (((isFinite(yaw) ? yaw : 0)-f.yaw)*180/Math.PI)
       };
     }
     function mapToSim(clientX,clientY){
       var rect=st.getBoundingClientRect();
       var stageX=(clientX-rect.left)*(1210/rect.width);
       var stageY=(clientY-rect.top)*(834/rect.height);
-      var c=routeMapConstants();
-      var sideMapStart=getSideRoadMapStart(c);
-      if(stageX>sideMapStart-26 && Math.abs(stageY-c.turnY)<95){
-        var sideT=clamp((stageX-sideMapStart)/(c.rightEndX-sideMapStart),0,1);
-        return {
-          x:Number((c.sideRoadStartX+sideT*(c.sideRoadEndX-c.sideRoadStartX)).toFixed(2)),
-          z:Number((c.turnZ+clamp((stageY-c.turnY)/34,-1,1)*6).toFixed(2))
-        };
-      }
-      var x=clamp((stageX-c.egoX)/c.approachLaneScale,-5.8,5.8);
-      var t=clamp((c.egoY-stageY)/(c.egoY-c.turnY),0,1);
-      var z=t*c.turnZ;
-      return { x:Number(x.toFixed(2)), z:Number(z.toFixed(2)) };
+      var world=mapToWorld(stageX,stageY);
+      return { x:Number(world.x.toFixed(2)), z:Number(world.z.toFixed(2)) };
     }
     function makeCar(className,x,y,color,rot,label,name){
       var car=document.createElement('div');
@@ -802,6 +951,19 @@
       if(label) car.title=label;
       car.dataset.name=name || key;
       return car;
+    }
+    function setConeElement(key,x,y){
+      var cone=vehicleElements[key];
+      if(!cone){
+        cone=document.createElement('div');
+        cone.className='console-cone';
+        vehicleElements[key]=cone;
+        vehiclesLayer.appendChild(cone);
+      }
+      cone.style.left=(Number(x)||0)+'px';
+      cone.style.top=(Number(y)||0)+'px';
+      cone.title='Road hazard';
+      return cone;
     }
     function removeStaleCars(liveKeys){
       Object.keys(vehicleElements).forEach(function(key){
@@ -919,13 +1081,14 @@
       }
       var liveKeys={};
       var ego=message.ego || { x:0, z:0, yaw:0, color:'#2F6FEF', label:'Your vehicle', name:'ego' };
-      var egoMapped=simToMap(ego);
+      var mapFrame=renderLiveMap(message);
+      var egoMapped=simToMap(ego,mapFrame);
       var mappedVehicles=[];
       liveKeys.ego=true;
-      setCarElement('ego','ego',egoMapped.x,egoMapped.y,ego.color || '#2F6FEF',egoMapped.rot || 0,ego.label,ego.name);
+      setCarElement('ego','ego',egoMapped.x,egoMapped.y,'rgba(47,111,239,.18)',egoMapped.rot || 0,ego.label,ego.name);
       (message.vehicles || []).forEach(function(vehicle,index){
         if(vehicle.mapRole==='ego' || vehicle.name==='ego') return;
-        var mapped=simToMap(vehicle);
+        var mapped=simToMap(vehicle,mapFrame);
         var key='vehicle-'+(vehicle.name || index);
         var className=(vehicle.emergency ? 'emergency ' : '')+(vehicle.brake ? 'braking' : '');
         liveKeys[key]=true;
@@ -947,6 +1110,11 @@
           map:mapped
         });
       });
+      if(message.cone && message.cone.visible){
+        var coneMapped=simToMap(message.cone,mapFrame);
+        liveKeys.cone=true;
+        setConeElement('cone',coneMapped.x,coneMapped.y);
+      }
       updateVehicleRecipientLabels(message.vehicles || []);
       maybeShowIncomingRequest(message);
       removeStaleCars(liveKeys);
@@ -1019,6 +1187,12 @@
         el.setAttribute('opacity', phase===name ? '1' : '.28');
       });
     }
+    renderLiveMap({
+      ego:{x:0,z:0,yaw:0,sideRoad:false},
+      state:{routeBranch:'approach'},
+      scenario:{title:'Navigation'},
+      route:{road:'Bohlman Rd'}
+    });
     bindCommunicationSends();
     connect();
     window.setInterval(checkStateFreshness,1000);

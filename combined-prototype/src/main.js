@@ -373,6 +373,7 @@ const state = {
   routeAssistanceChoice: "",
   centerDisplayGoAheadSentAt: null,
   centerDisplayThankYouAt: null,
+  freeDriveDistance: 0,
   agentListening: false,
   agentAutoListen: false,
   lastAgentCommand: "",
@@ -1549,6 +1550,7 @@ function activateScenario(index, options = {}) {
   state.routeAssistanceChoice = "";
   state.centerDisplayGoAheadSentAt = null;
   state.centerDisplayThankYouAt = null;
+  state.freeDriveDistance = 0;
   state.agentListening = false;
   state.agentAutoListen = false;
   state.lastAgentCommand = "";
@@ -3955,7 +3957,7 @@ function createCenterDisplayTelemetry() {
 }
 
 function getCenterDisplayEgoTelemetry() {
-  const routePosition = getRouteTurnEgoPosition();
+  const routePosition = getCenterDisplayEgoPosition();
   return {
     name: "ego",
     label: "Your vehicle",
@@ -3966,8 +3968,20 @@ function getCenterDisplayEgoTelemetry() {
     color: "#2F6FEF",
     mapRole: "ego",
     sideRoad: routePosition.sideRoad,
-    routeProgress: roundTelemetryValue(state.routeTurnProgress),
-    routeBranch: getRouteBranch()
+    routeProgress: roundTelemetryValue(routePosition.routeProgress ?? state.routeTurnProgress),
+    routeBranch: routePosition.routeBranch || getRouteBranch()
+  };
+}
+
+function getCenterDisplayEgoPosition() {
+  if (isRouteWorldDriving()) return getRouteTurnEgoPosition();
+  return {
+    x: state.lateral,
+    z: -state.freeDriveDistance,
+    yaw: 0,
+    sideRoad: false,
+    routeProgress: 0,
+    routeBranch: "free-drive"
   };
 }
 
@@ -4086,27 +4100,35 @@ function getRouteTurnPoint(progress, options = {}) {
 }
 
 function getCenterDisplayVehicleTelemetry() {
+  const egoPosition = getCenterDisplayEgoPosition();
+  const useRelativeScenePositions = !isRouteWorldDriving();
   return trafficGroup.children
     .filter((vehicle) => vehicle.visible !== false)
-    .map((vehicle) => ({
-      name: vehicle.userData.name,
-      label: vehicle.userData.label || vehicle.userData.name,
-      x: roundTelemetryValue(vehicle.position.x),
-      z: roundTelemetryValue(vehicle.position.z),
-      yaw: roundTelemetryValue(vehicle.rotation.y),
-      lane: roundTelemetryValue(vehicle.userData.baseLane),
-      color: vehicle.userData.color || "#8A8A90",
-      accent: vehicle.userData.accent || null,
-      mapRole: vehicle.userData.mapRole || null,
-      sideRoad: Boolean(vehicle.userData.sideRoad || vehicle.userData.currentSideRoad),
-      coordinationRequest: Boolean(vehicle.userData.coordinationRequest && vehicle.userData.requestActive),
-      requestType: vehicle.userData.requestType || null,
-      emergency: Boolean(vehicle.userData.emergency),
-      brake: Boolean(vehicle.userData.brake)
-    }));
+    .map((vehicle) => {
+      const worldX = vehicle.position.x;
+      const worldZ = useRelativeScenePositions ? egoPosition.z + vehicle.position.z : vehicle.position.z;
+      return {
+        name: vehicle.userData.name,
+        label: vehicle.userData.label || vehicle.userData.name,
+        x: roundTelemetryValue(worldX),
+        z: roundTelemetryValue(worldZ),
+        yaw: roundTelemetryValue(vehicle.rotation.y),
+        lane: roundTelemetryValue(vehicle.userData.baseLane),
+        color: vehicle.userData.color || "#8A8A90",
+        accent: vehicle.userData.accent || null,
+        mapRole: vehicle.userData.mapRole || null,
+        sideRoad: Boolean(vehicle.userData.sideRoad || vehicle.userData.currentSideRoad),
+        coordinationRequest: Boolean(vehicle.userData.coordinationRequest && vehicle.userData.requestActive),
+        requestType: vehicle.userData.requestType || null,
+        emergency: Boolean(vehicle.userData.emergency),
+        brake: Boolean(vehicle.userData.brake)
+      };
+    });
 }
 
 function getCenterDisplayConeTelemetry() {
+  const egoPosition = getCenterDisplayEgoPosition();
+  const useRelativeScenePositions = !isRouteWorldDriving();
   if (!centerDisplayCone?.visible) {
     return {
       visible: false,
@@ -4117,7 +4139,7 @@ function getCenterDisplayConeTelemetry() {
   return {
     visible: true,
     x: roundTelemetryValue(centerDisplayCone.position.x),
-    z: roundTelemetryValue(centerDisplayCone.position.z),
+    z: roundTelemetryValue(useRelativeScenePositions ? egoPosition.z + centerDisplayCone.position.z : centerDisplayCone.position.z),
     passedDriver: false
   };
 }
@@ -4196,8 +4218,8 @@ function bindControls() {
 
   speedUp?.addEventListener("click", () => changeSpeed(4));
   speedDown?.addEventListener("click", () => changeSpeed(-4));
-  steerLeft?.addEventListener("click", () => steer(-0.72));
-  steerRight?.addEventListener("click", () => steer(0.72));
+  steerLeft?.addEventListener("click", () => steer(-0.24));
+  steerRight?.addEventListener("click", () => steer(0.24));
 
   window.addEventListener("keydown", (event) => {
     refreshWheelInput();
@@ -4206,12 +4228,12 @@ function bindControls() {
     if (keyboardDriving && keyAction) event.preventDefault();
     if (keyboardDriving && keyAction === "right") {
       keyboardDriveKeys.add("right");
-      steer(0.58);
+      steer(0.18);
       updateKeyboardDriveInput();
     }
     if (keyboardDriving && keyAction === "left") {
       keyboardDriveKeys.add("left");
-      steer(-0.58);
+      steer(-0.18);
       updateKeyboardDriveInput();
     }
     if (keyboardDriving && keyAction === "gas") {
@@ -4820,17 +4842,17 @@ function updateWheelInput(delta) {
   const routeSteerIntent = THREE.MathUtils.clamp(steeringAxis, 0, 1);
   state.routeTurnSteerIntent = THREE.MathUtils.clamp(routeSteerIntent, 0, 1);
   if (state.routeTurnActive) {
-    state.steeringImpulse = THREE.MathUtils.clamp(steeringAxis * 0.28, -0.28, 0.28);
+    state.steeringImpulse = THREE.MathUtils.clamp(steeringAxis * 0.2, -0.2, 0.2);
   } else {
     const target = steeringAxis < 0 ? steeringAxis * wheelLeftLimit : steeringAxis * wheelRightLimit;
     const previousTarget = state.targetLateral;
     state.targetLateral = THREE.MathUtils.damp(
       state.targetLateral,
       THREE.MathUtils.clamp(target, -lateralLeftLimit, lateralRightLimit),
-      10.8,
+      5.8,
       delta
     );
-    state.steeringImpulse = THREE.MathUtils.clamp((state.targetLateral - previousTarget) * 2.8, -0.52, 0.52);
+    state.steeringImpulse = THREE.MathUtils.clamp((state.targetLateral - previousTarget) * 1.45, -0.24, 0.24);
     if (routeSteerIntent > routeTurnSteerStartThreshold || state.targetLateral > laneWidth * 0.9) requestRouteTurn();
   }
   wheelInput.lastAxis = axis;
@@ -4860,17 +4882,17 @@ function applyKeyboardSteeringInput(delta) {
   const routeSteerIntent = THREE.MathUtils.clamp(steeringAxis, 0, 1);
   state.routeTurnSteerIntent = THREE.MathUtils.clamp(routeSteerIntent, 0, 1);
   if (state.routeTurnActive) {
-    state.steeringImpulse = THREE.MathUtils.clamp(steeringAxis * 0.32, -0.32, 0.32);
+    state.steeringImpulse = THREE.MathUtils.clamp(steeringAxis * 0.22, -0.22, 0.22);
   } else {
     const target = steeringAxis < 0 ? steeringAxis * wheelLeftLimit : steeringAxis * wheelRightLimit;
     const previousTarget = state.targetLateral;
     state.targetLateral = THREE.MathUtils.damp(
       state.targetLateral,
       THREE.MathUtils.clamp(target, -lateralLeftLimit, lateralRightLimit),
-      11.8,
+      4.6,
       delta
     );
-    state.steeringImpulse = THREE.MathUtils.clamp((state.targetLateral - previousTarget) * 2.8, -0.58, 0.58);
+    state.steeringImpulse = THREE.MathUtils.clamp((state.targetLateral - previousTarget) * 1.45, -0.26, 0.26);
     if (routeSteerIntent > routeTurnSteerStartThreshold || state.targetLateral > laneWidth * 0.9) requestRouteTurn();
   }
   wheelInput.lastAxis = steeringAxis;
@@ -5294,8 +5316,9 @@ function updateDecisionControls() {
 
 function steer(amount) {
   if (state.routeTurnActive) {
-    state.routeTurnSteerIntent = THREE.MathUtils.clamp(Math.max(state.routeTurnSteerIntent, amount), 0, 1);
-    state.steeringImpulse = amount;
+    const softenedAmount = amount * 0.65;
+    state.routeTurnSteerIntent = THREE.MathUtils.clamp(Math.max(state.routeTurnSteerIntent, softenedAmount), 0, 1);
+    state.steeringImpulse = softenedAmount;
     return;
   }
   state.targetLateral = THREE.MathUtils.clamp(state.targetLateral + amount, -lateralLeftLimit, lateralRightLimit);
@@ -5551,6 +5574,18 @@ function updateRouteTurn(delta, scenario) {
   }
 }
 
+function applyFreeDriveCamera(delta) {
+  const steerLook = THREE.MathUtils.clamp(state.visualSteeringAxis * 0.02 + state.steeringImpulse * 0.02, -0.04, 0.04);
+  const laneLook = THREE.MathUtils.clamp(-state.lateral * 0.005, -0.026, 0.026);
+  camera.position.x = THREE.MathUtils.damp(camera.position.x, state.lateral, 3.6, delta);
+  camera.position.y = cameraBaseHeight;
+  camera.position.z = THREE.MathUtils.damp(camera.position.z, cameraBaseZ, 6.8, delta);
+  camera.rotation.x = THREE.MathUtils.damp(camera.rotation.x, cameraBasePitch, 5.8, delta);
+  camera.rotation.y = THREE.MathUtils.damp(camera.rotation.y, steerLook + laneLook, 3.8, delta);
+  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, -state.lateral * 0.0025, 3.8, delta);
+  syncRouteTurnDebug();
+}
+
 function applyRouteCamera(delta) {
   const turnEase = THREE.MathUtils.smoothstep(state.routeTurnProgress, 0, 1);
   const cameraPoint = offsetRoutePointLaterally(getRouteCurrentPoint({
@@ -5600,7 +5635,7 @@ function applyRouteCamera(delta) {
 }
 
 function syncRouteTurnDebug() {
-  const routePosition = getRouteTurnEgoPosition();
+  const routePosition = getCenterDisplayEgoPosition();
   const routeDebug = {
     active: state.routeTurnActive,
     complete: state.routeTurnComplete,
@@ -5703,6 +5738,7 @@ function runFrame() {
     speedReadout.textContent = Math.round(state.speed);
     const pace = state.speed / 38;
     if (!isRouteWorldDriving(scenario)) {
+      state.freeDriveDistance += delta * Math.max(state.speed, 0) * routeApproachDistanceScale;
       state.roadOffset = (state.roadOffset + delta * pace * 7.1) % 8;
       materials.road.map.offset.y = -state.roadOffset * 0.028;
       if (materials.shoulder?.map) materials.shoulder.map.offset.y = -state.roadOffset * 0.022;
@@ -5723,7 +5759,7 @@ function runFrame() {
     applyRouteCamera(cameraDelta);
     updateRouteWorldTracking();
   } else {
-    syncRouteTurnDebug();
+    applyFreeDriveCamera(cameraDelta);
   }
   const wheelTarget = THREE.MathUtils.clamp(
     state.visualSteeringAxis * 34 + state.lateral * 5 + state.steeringImpulse * 10,
